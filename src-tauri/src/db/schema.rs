@@ -3,10 +3,11 @@ use rusqlite::Result;
 use crate::db::Connection;
 
 // question表
+#[derive(Debug, Clone)]
 pub struct QuestionRow {
     pub id: i64,
     pub name: Option<String>,
-    pub state: i32,
+    pub state: String,
     pub created_at: i64,
     pub deleted_at: Option<i64>,
 }
@@ -15,12 +16,12 @@ pub struct QuestionRow {
 pub fn insert_question(
     conn: &Connection,
     name: Option<&str>,
-    state: i32,
+    state: &str,
     created_at: i64,
 ) -> Result<i64> {
     conn.execute(
         r#"
-        INSERT INTO questions (name, state, created_at)
+        INSERT INTO question (name, state, created_at)
         VALUES (?1, ?2, ?3)
         "#,
         (name, state, created_at),
@@ -30,16 +31,16 @@ pub fn insert_question(
 }
 
 /* 删除一条记录 */
-pub fn delete_question(conn: &Connection, question_id: i64) -> Result<()> {
-    conn.execute(
-        r#"
-        DELETE FROM questions
-        WHERE id = ?1
-        "#,
-        (question_id,),
-    )?;
-    Ok(())
-}
+// pub fn delete_question(conn: &Connection, question_id: i64) -> Result<()> {
+//     conn.execute(
+//         r#"
+//         DELETE FROM question
+//         WHERE id = ?1
+//         "#,
+//         (question_id,),
+//     )?;
+//     Ok(())
+// }
 
 /* 修改题目名 */
 pub fn update_question_name(
@@ -49,7 +50,7 @@ pub fn update_question_name(
 ) -> Result<()> {
     conn.execute(
         r#"
-        UPDATE questions
+        UPDATE question
         SET name = ?1
         WHERE id = ?2
         "#,
@@ -66,7 +67,7 @@ pub fn update_question_deleted_at(
 ) -> Result<()> {
     conn.execute(
         r#"
-        UPDATE questions
+        UPDATE question
         SET deleted_at = ?1
         WHERE id = ?2
         "#,
@@ -80,7 +81,7 @@ pub fn get_question_by_id(conn: &Connection, id: i64) -> Result<Option<QuestionR
     let mut stmt = conn.prepare(
         r#"
         SELECT id, name, state, created_at, deleted_at
-        FROM questions
+        FROM question
         WHERE id = ?1
         "#,
     )?;
@@ -106,7 +107,7 @@ pub fn get_question_by_name(conn: &Connection, name: &str) -> Result<Option<Ques
     let mut stmt = conn.prepare(
         r#"
         SELECT id, name, state, created_at, deleted_at
-        FROM questions
+        FROM question
         WHERE name = ?1
         "#,
     )?;
@@ -132,7 +133,7 @@ pub fn list_questions(conn: &Connection) -> Result<Vec<QuestionRow>> {
     let mut stmt = conn.prepare(
         r#"
         SELECT id, name, state, created_at, deleted_at
-        FROM questions
+        FROM question
         "#,
     )?;
 
@@ -155,6 +156,7 @@ pub fn list_questions(conn: &Connection) -> Result<Vec<QuestionRow>> {
 }
 
 // review 不可删，不可改
+#[derive(Debug, Clone)]
 struct ReviewRow {
     pub id: i64,
     pub question_id: i64,
@@ -171,7 +173,7 @@ pub fn insert_review(
 ) -> Result<i64> {
     conn.execute(
         r#"
-        INSERT INTO reviews (question_id, content, created_at)
+        INSERT INTO review (question_id, content, created_at)
         VALUES (?1, ?2, ?3)
         "#,
         (question_id, content, created_at),
@@ -187,6 +189,7 @@ pub fn insert_review(
 //pub fn list_reviews_by_question_id(conn: &Connection, question_id: i64) -> Result<Vec<ReviewRow>> {}
 
 // asset 以删代改
+#[derive(Debug, Clone)]
 struct AssetRow {
     pub id: i64,
     pub question_id: i64,
@@ -201,6 +204,7 @@ struct AssetRow {
 /* 查找某题目的所有资源 */
 
 // meta
+#[derive(Debug, Clone)]
 struct MetaRow {
     pub id: i64,
     pub question_id: i64,

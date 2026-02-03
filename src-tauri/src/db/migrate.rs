@@ -58,7 +58,11 @@ const MIGRATIONS: &[Migration] = &[Migration {
         "#,
 }];
 
-// 入口：启动时调用
+/*
+    启动时调用，检查当前 schema 版本，依次应用未应用的迁移
+    输入：
+    - conn: 可变数据库连接引用
+*/
 pub fn migrate(conn: &mut Connection) -> Result<()> {
     ensure_schema_version_table(conn)?;
 
@@ -73,7 +77,7 @@ pub fn migrate(conn: &mut Connection) -> Result<()> {
     Ok(())
 }
 
-// 确保 schema_version 表存在
+// 工具函数，确保 schema_version 表存在
 fn ensure_schema_version_table(conn: &Connection) -> Result<()> {
     conn.execute(
         r#"
@@ -86,7 +90,7 @@ fn ensure_schema_version_table(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
-// 读取当前 schema version
+// 工具函数，读取当前 schema version
 fn get_current_version(conn: &Connection) -> Result<i32> {
     let mut stmt = conn.prepare("SELECT version FROM schema_version LIMIT 1")?;
 
@@ -95,7 +99,7 @@ fn get_current_version(conn: &Connection) -> Result<i32> {
     Ok(version)
 }
 
-// 执行单条迁移
+// 工具函数，执行单条迁移
 fn apply_migration(conn: &mut Connection, migration: &Migration) -> Result<()> {
     let tx = conn.transaction()?;
 
