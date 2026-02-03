@@ -181,10 +181,10 @@ pub fn insert_review(
 }
 
 /* 用ID查找复习记录 */
-pub fn get_review_by_id(conn: &Connection, id: i64) -> Result<Option<ReviewRow>> {}
+//pub fn get_review_by_id(conn: &Connection, id: i64) -> Result<Option<ReviewRow>> {}
 
 /* 查找某题目的所有复习记录 */
-pub fn list_reviews_by_question_id(conn: &Connection, question_id: i64) -> Result<Vec<ReviewRow>> {}
+//pub fn list_reviews_by_question_id(conn: &Connection, question_id: i64) -> Result<Vec<ReviewRow>> {}
 
 // asset 以删代改
 struct AssetRow {
