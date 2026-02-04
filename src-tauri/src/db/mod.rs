@@ -1,10 +1,17 @@
+pub mod asset_schema;
 pub mod connection;
+pub mod error;
+pub mod meta_schema;
 pub mod migrate;
-pub mod schema;
+pub mod question_schema;
+pub mod review_schema;
 
+pub use asset_schema::*;
 pub use connection::*;
+pub use meta_schema::*;
 pub use migrate::*;
-pub use schema::*;
+pub use question_schema::*;
+pub use review_schema::*;
 
 use rusqlite::Connection;
 use std::path::Path;

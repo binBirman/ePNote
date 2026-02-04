@@ -4,6 +4,7 @@
 mod db;
 mod util;
 
+use app_lib::error::AppError;
 use std::path::PathBuf;
 
 fn main() {
@@ -15,15 +16,15 @@ fn main() {
 
     println!("DB initialized: {:?}", conn);
 
-    let q1: Option<db::schema::QuestionRow> = db::schema::get_question_by_id(&conn, 1).unwrap();
-    let q2: Option<db::schema::QuestionRow> =
-        db::schema::get_question_by_name(&conn, "Example Question2").unwrap();
+    let q1: Option<db::QuestionRow> = db::select_question_by_id(&conn, 1).unwrap();
+    let q2: Option<db::QuestionRow> =
+        db::select_question_by_name(&conn, "Example Question2").unwrap();
 
     //输出查询结果
-    let q1c = util::ts_to_utc_datetime(q1.clone().unwrap().created_at);
-    let q1d = util::ts_to_utc_datetime(q1.clone().unwrap().deleted_at.unwrap());
+    let q1c = util::ts_to_local_datetime(q1.clone().unwrap().created_at);
+    let q1d = util::ts_to_local_datetime(q1.clone().unwrap().deleted_at.unwrap());
 
-    let q2c = util::ts_to_utc_datetime(q2.clone().unwrap().created_at);
+    let q2c = util::ts_to_local_datetime(q2.clone().unwrap().created_at);
 
     println!(
         "Question 1:, created at: {:?}, deleted at: {:?}",
@@ -34,11 +35,26 @@ fn main() {
 
     println!(
         "Q1 created at {:?} days ago, deleted at: {:?} days ago.",
-        util::time_util::days_from_now(q1.clone().unwrap().created_at),
-        util::time_util::days_from_now(q1.clone().unwrap().deleted_at.unwrap())
+        util::days_since(q1.clone().unwrap().created_at),
+        util::days_since(q1.clone().unwrap().deleted_at.unwrap())
     );
     println!(
         "Q2 created at {:?} days ago.",
-        util::time_util::days_from_now(q2.clone().unwrap().created_at)
+        util::days_since(q2.clone().unwrap().created_at)
     );
+
+    let q3 = db::select_question_by_id(&conn, 10);
+
+    match q3 {
+        Ok(Some(q)) => {
+            let qc = util::ts_to_local_datetime(q.created_at);
+            println!("Question 3:, created at: {:?}", qc.clone());
+        }
+        Ok(None) => {
+            println!("Question 3 not found.");
+        }
+        Err(e) => {
+            println!("Error querying Question 3: {:?}", e);
+        }
+    }
 }

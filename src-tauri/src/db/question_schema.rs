@@ -1,8 +1,8 @@
 use rusqlite::Result;
 
+use crate::db::error::DbError;
 use crate::db::Connection;
 
-// question表
 #[derive(Debug, Clone)]
 pub struct QuestionRow {
     pub id: i64,
@@ -12,13 +12,22 @@ pub struct QuestionRow {
     pub deleted_at: Option<i64>,
 }
 
-/* 增加一条记录 */
+/*
+    增加一条题目记录
+    输入：
+        name: 题目名称，可选
+        state: 题目状态，必填
+        created_at: 创建时间戳，必填
+    输出：
+        若插入成功，返回新增记录的ID
+        若插入失败，返回错误信息
+*/
 pub fn insert_question(
     conn: &Connection,
     name: Option<&str>,
     state: &str,
     created_at: i64,
-) -> Result<i64> {
+) -> Result<i64, DbError> {
     conn.execute(
         r#"
         INSERT INTO question (name, state, created_at)
@@ -26,7 +35,6 @@ pub fn insert_question(
         "#,
         (name, state, created_at),
     )?;
-
     Ok(conn.last_insert_rowid())
 }
 
@@ -42,12 +50,19 @@ pub fn insert_question(
 //     Ok(())
 // }
 
-/* 修改题目名 */
+/*
+    修改题目名
+    输入：
+        question_id: 题目ID，必填
+        new_name: 新题目名称，可选
+    输出：
+        若修改成功，返回空值
+*/
 pub fn update_question_name(
     conn: &Connection,
     question_id: i64,
     new_name: Option<&str>,
-) -> Result<()> {
+) -> Result<(), DbError> {
     conn.execute(
         r#"
         UPDATE question
@@ -59,12 +74,19 @@ pub fn update_question_name(
     Ok(())
 }
 
-/* 修改题目删除日期 */
+/*
+    修改题删除日期
+    输入：
+        question_id: 题目ID，必填
+        new_deleted_at: 新题目删除日期，可选，可为空
+    输出：
+        若修改成功，返回空值
+*/
 pub fn update_question_deleted_at(
     conn: &Connection,
     question_id: i64,
     new_deleted_at: Option<i64>,
-) -> Result<()> {
+) -> Result<(), DbError> {
     conn.execute(
         r#"
         UPDATE question
@@ -76,8 +98,14 @@ pub fn update_question_deleted_at(
     Ok(())
 }
 
-/* 用ID查找题目 */
-pub fn get_question_by_id(conn: &Connection, id: i64) -> Result<Option<QuestionRow>> {
+/*
+    用ID查找题目
+    输入：
+        id: 题目ID，必填
+    输出：
+        若找到，返回Some(QuestionRow)
+*/
+pub fn select_question_by_id(conn: &Connection, id: i64) -> Result<Option<QuestionRow>, DbError> {
     let mut stmt = conn.prepare(
         r#"
         SELECT id, name, state, created_at, deleted_at
@@ -103,7 +131,17 @@ pub fn get_question_by_id(conn: &Connection, id: i64) -> Result<Option<QuestionR
     Ok(None)
 }
 
-pub fn get_question_by_name(conn: &Connection, name: &str) -> Result<Option<QuestionRow>> {
+/*
+    用名称查找题目
+    输入：
+        name: 题目名称，必填
+    输出：
+        若找到，返回Some(QuestionRow)
+*/
+pub fn select_question_by_name(
+    conn: &Connection,
+    name: &str,
+) -> Result<Option<QuestionRow>, DbError> {
     let mut stmt = conn.prepare(
         r#"
         SELECT id, name, state, created_at, deleted_at
@@ -129,15 +167,30 @@ pub fn get_question_by_name(conn: &Connection, name: &str) -> Result<Option<Ques
     Ok(None)
 }
 
-pub fn list_questions(conn: &Connection) -> Result<Vec<QuestionRow>> {
+/*
+    分页列出未删除题目
+    输入：
+        limit: 每页记录数
+        offset: 偏移量
+    输出：
+        返回未删除题目列表
+*/
+pub fn select_questions_page(
+    conn: &Connection,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<QuestionRow>, DbError> {
     let mut stmt = conn.prepare(
         r#"
         SELECT id, name, state, created_at, deleted_at
         FROM question
+        WHERE deleted_at IS NULL
+        ORDER BY created_at DESC
+        LIMIT ?1 OFFSET ?2
         "#,
     )?;
 
-    let question_iter = stmt.query_map((), |row| {
+    let iter = stmt.query_map([limit, offset], |row| {
         Ok(QuestionRow {
             id: row.get(0)?,
             name: row.get(1)?,
@@ -147,71 +200,37 @@ pub fn list_questions(conn: &Connection) -> Result<Vec<QuestionRow>> {
         })
     })?;
 
-    let mut questions = Vec::new();
-    for question in question_iter {
-        questions.push(question?);
-    }
-
-    Ok(questions)
+    iter.collect::<Result<Vec<_>, _>>().map_err(Into::into)
 }
 
-// review 不可删，不可改
-#[derive(Debug, Clone)]
-struct ReviewRow {
-    pub id: i64,
-    pub question_id: i64,
-    pub content: String,
-    pub created_at: i64,
-}
+/*
+    列出所有未删除题目（直接搜索全库，慎用！慎用！）
+    输入：
+        无
+    输出：
+        返回未删除题目列表
+*/
+// pub fn select_questions_active(conn: &Connection) -> Result<Vec<QuestionRow>, DbError> {
+//     let mut stmt = conn.prepare(
+//         r#"
+//         SELECT id, name, state, created_at, deleted_at
+//         FROM question
+//         WHERE deleted_at IS NULL
+//         ORDER BY created_at DESC
+//         "#,
+//     )?;
 
-/* 增加一条记录 */
-pub fn insert_review(
-    conn: &Connection,
-    question_id: i64,
-    content: &str,
-    created_at: i64,
-) -> Result<i64> {
-    conn.execute(
-        r#"
-        INSERT INTO review (question_id, content, created_at)
-        VALUES (?1, ?2, ?3)
-        "#,
-        (question_id, content, created_at),
-    )?;
+//     let question_iter = stmt.query_map([], |row| {
+//         Ok(QuestionRow {
+//             id: row.get(0)?,
+//             name: row.get(1)?,
+//             state: row.get(2)?,
+//             created_at: row.get(3)?,
+//             deleted_at: row.get(4)?,
+//         })
+//     })?;
 
-    Ok(conn.last_insert_rowid())
-}
-
-/* 用ID查找复习记录 */
-//pub fn get_review_by_id(conn: &Connection, id: i64) -> Result<Option<ReviewRow>> {}
-
-/* 查找某题目的所有复习记录 */
-//pub fn list_reviews_by_question_id(conn: &Connection, question_id: i64) -> Result<Vec<ReviewRow>> {}
-
-// asset 以删代改
-#[derive(Debug, Clone)]
-struct AssetRow {
-    pub id: i64,
-    pub question_id: i64,
-    pub type_: String,
-    pub path: String,
-    pub created_at: i64,
-    pub deleted_at: Option<i64>,
-}
-/* 增加一条记录 */
-/* 删除一条记录 */
-/* 用ID查找资源 */
-/* 查找某题目的所有资源 */
-
-// meta
-#[derive(Debug, Clone)]
-struct MetaRow {
-    pub id: i64,
-    pub question_id: i64,
-    pub key: String,
-    pub value: String,
-}
-/* 增加一条记录 */
-/* 删除一条记录 */
-/* 用ID查找元信息 */
-/* 查找某题目的所有元信息 */
+//     question_iter
+//         .collect::<Result<Vec<_>, _>>()
+//         .map_err(Into::into)
+// }
