@@ -16,14 +16,13 @@ pub fn insert_meta(
     question_id: i64,
     key: &str,
     value: &str,
-    created_at: i64,
 ) -> Result<i64, DbError> {
     conn.execute(
         r#"
-        INSERT INTO meta (question_id, key, value, created_at)
-        VALUES (?1, ?2, ?3, ?4)
+        INSERT INTO meta (question_id, key, value)
+        VALUES (?1, ?2, ?3)
         "#,
-        (question_id, key, value, created_at),
+        (question_id, key, value),
     )?;
 
     Ok(conn.last_insert_rowid())

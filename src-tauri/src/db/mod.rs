@@ -5,6 +5,7 @@ pub mod meta_schema;
 pub mod migrate;
 pub mod question_schema;
 pub mod review_schema;
+mod tests;
 
 pub use asset_schema::*;
 pub use connection::*;

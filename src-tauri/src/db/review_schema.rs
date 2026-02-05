@@ -7,23 +7,23 @@ use crate::db::Connection;
 pub struct ReviewRow {
     pub id: i64,
     pub question_id: i64,
-    pub content: String,
-    pub created_at: i64,
+    pub result: String,
+    pub reviewed_at: i64,
 }
 
 /* 增加一条记录 */
 pub fn insert_review(
     conn: &Connection,
     question_id: i64,
-    content: &str,
-    created_at: i64,
+    result: &str,
+    reviewed_at: i64,
 ) -> Result<i64, DbError> {
     conn.execute(
         r#"
-        INSERT INTO review (question_id, content, created_at)
+        INSERT INTO review (question_id, result, reviewed_at)
         VALUES (?1, ?2, ?3)
         "#,
-        (question_id, content, created_at),
+        (question_id, result, reviewed_at),
     )?;
 
     Ok(conn.last_insert_rowid())
@@ -33,7 +33,7 @@ pub fn insert_review(
 pub fn select_review_by_id(conn: &Connection, id: i64) -> Result<Option<ReviewRow>, DbError> {
     let mut stmt = conn.prepare(
         r#"
-        SELECT id, question_id, content, created_at
+        SELECT id, question_id, result, reviewed_at
         FROM review
         WHERE id = ?1
         "#,
@@ -43,8 +43,8 @@ pub fn select_review_by_id(conn: &Connection, id: i64) -> Result<Option<ReviewRo
         Ok(ReviewRow {
             id: row.get(0)?,
             question_id: row.get(1)?,
-            content: row.get(2)?,
-            created_at: row.get(3)?,
+            result: row.get(2)?,
+            reviewed_at: row.get(3)?,
         })
     })?;
 
@@ -62,7 +62,7 @@ pub fn select_reviews_by_question_id(
 ) -> Result<Vec<ReviewRow>, DbError> {
     let mut stmt = conn.prepare(
         r#"
-        SELECT id, question_id, content, created_at
+        SELECT id, question_id, result, reviewed_at
         FROM review
         WHERE question_id = ?1
         "#,
@@ -72,8 +72,8 @@ pub fn select_reviews_by_question_id(
         Ok(ReviewRow {
             id: row.get(0)?,
             question_id: row.get(1)?,
-            content: row.get(2)?,
-            created_at: row.get(3)?,
+            result: row.get(2)?,
+            reviewed_at: row.get(3)?,
         })
     })?;
 
@@ -90,9 +90,9 @@ pub fn select_reviews_by_time_range(
 ) -> Result<Vec<ReviewRow>, DbError> {
     let mut stmt = conn.prepare(
         r#"
-        SELECT id, question_id, content, created_at
+        SELECT id, question_id, result, reviewed_at
         FROM review
-        WHERE created_at BETWEEN ?1 AND ?2
+        WHERE reviewed_at BETWEEN ?1 AND ?2
         "#,
     )?;
 
@@ -100,8 +100,8 @@ pub fn select_reviews_by_time_range(
         Ok(ReviewRow {
             id: row.get(0)?,
             question_id: row.get(1)?,
-            content: row.get(2)?,
-            created_at: row.get(3)?,
+            result: row.get(2)?,
+            reviewed_at: row.get(3)?,
         })
     })?;
 
