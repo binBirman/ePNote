@@ -1,8 +1,8 @@
-use super::asset_schema::*;
-use super::meta_schema::*;
 use super::migrate;
-use super::question_schema::*;
-use super::review_schema::*;
+use super::schema::asset_schema::*;
+use super::schema::meta_schema::*;
+use super::schema::question_schema::*;
+use super::schema::review_schema::*;
 use super::Connection;
 use chrono::Utc;
 

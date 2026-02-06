@@ -2,4 +2,7 @@ pub mod db;
 pub mod error;
 pub mod model;
 pub mod repo;
-pub mod util;
+pub mod util {
+    pub mod path;
+    pub mod time;
+}
