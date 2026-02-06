@@ -1,6 +1,6 @@
 pub mod db;
+pub mod domain;
 pub mod error;
-pub mod model;
 pub mod repo;
 pub mod util {
     pub mod path;
