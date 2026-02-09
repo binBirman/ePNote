@@ -3,6 +3,8 @@ mod error;
 mod fs;
 mod layout;
 mod sanitize;
+mod security_test;
+mod tests;
 mod types;
 
 pub use builder::PathBuilder;
