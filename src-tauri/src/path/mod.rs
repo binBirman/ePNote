@@ -3,9 +3,12 @@ mod error;
 mod fs;
 mod layout;
 mod sanitize;
-mod security_test;
-mod tests;
 mod types;
+
+mod tests {
+    mod security_test;
+    mod test;
+}
 
 pub use builder::PathBuilder;
 pub use error::{PathError, SanitizeError, StorageError};

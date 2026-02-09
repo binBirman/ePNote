@@ -7,12 +7,4 @@ mod util;
 use app_lib::error::AppError;
 use std::path::PathBuf;
 
-fn main() {
-    // let data_root = PathBuf::from("./DataRoot");
-
-    // std::fs::create_dir_all(&data_root).unwrap();
-
-    // let conn = db::init_db(&data_root).unwrap();
-
-    // println!("DB initialized: {:?}", conn);
-}
+fn main() {}

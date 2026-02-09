@@ -1,8 +1,13 @@
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct QuestionId(pub i64);
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ReviewId(pub i64);
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AssetId(pub i64);
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MetaId(pub i64);
+use uuid::Uuid;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct QuestionId(pub Uuid);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ReviewId(pub Uuid);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct AssetId(pub Uuid);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct MetaId(pub Uuid);

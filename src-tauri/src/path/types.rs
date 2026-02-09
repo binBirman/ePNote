@@ -17,6 +17,6 @@ impl PhysicalPath {
 
 #[derive(Debug, Clone)]
 pub struct LogicalPath {
-    pub namespace: String,
-    pub key: String,
+    pub namespace: String, // 顶层挂载点
+    pub key: String,       // 该挂载点下的相对路径
 }

@@ -6,3 +6,4 @@ pub mod repo;
 pub mod util {
     pub mod time;
 }
+pub mod app;
