@@ -1,81 +1,23 @@
 use crate::app::error::*;
+use crate::app::instance::init_dataroot;
 use crate::app::types::*;
 use crate::db::migrate;
+//use crate::db::migrate::migrate;
 
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-pub fn init_dataroot(root: PathBuf) -> Result<DataRootContext, InitError> {
-    // 1 创建根目录
-    ensure_dir(&root)?;
+pub fn init_note(root: PathBuf) -> Result<(), InitError> {
+    // 初始化数据根目录，执行instance校验，获取上下文
+    let ctx = init_dataroot(root.clone()).expect("初始化数据目录失败");
 
-    // 2 定义结构
-    let assets_dir = root.join("assets");
-    let trash_dir = root.join("trash");
-    let exports_dir = root.join("exports");
-    let backups_dir = root.join("backups");
+    // 打开数据库
+    let conn = rusqlite::Connection::open(&ctx.db_path).expect("无法打开数据库");
 
-    let question_dir = assets_dir.join("question");
-    let answer_dir = assets_dir.join("answer");
-    let explain_dir = assets_dir.join("explain");
-    let other_dir = assets_dir.join("other");
-
-    // 3 创建目录
-    ensure_dir(&assets_dir)?;
-    ensure_dir(&trash_dir)?;
-    ensure_dir(&exports_dir)?;
-    ensure_dir(&backups_dir)?;
-
-    ensure_dir(&question_dir)?;
-    ensure_dir(&answer_dir)?;
-    ensure_dir(&explain_dir)?;
-    ensure_dir(&other_dir)?;
-
-    // 4 instance.json
-    init_instance(&root)?;
-
-    // 5 DB 路径
-    let db_path = root.join("db.sqlite");
-
-    Ok(DataRootContext {
-        root,
-        assets_dir,
-        trash_dir,
-        exports_dir,
-        backups_dir,
-        db_path,
-    })
-}
-
-fn ensure_dir(path: &Path) -> Result<(), std::io::Error> {
-    if !path.exists() {
-        std::fs::create_dir_all(path)?;
-    }
-    Ok(())
-}
-
-fn init_instance(root: &Path) -> Result<(), InitError> {
-    let instance_file = root.join(".instance.json");
-
-    if instance_file.exists() {
-        // 读取并校验 instance 文件
-        let content = std::fs::read_to_string(&instance_file)
-            .map_err(|_| InitError::InstanceError)?;
-        let instance: InstanceFile = serde_json::from_str(&content)
-            .map_err(|_| InitError::InstanceError)?;
-        // 可根据需要添加更详细的校验逻辑
-        // 这里只要能反序列化就认为有效
-        return Ok(());
-    }
-
-    let instance = InstanceFile::default();
-
-    let json = serde_json::to_string_pretty(&instance).map_err(|_| InitError::InstanceError)?;
-
-    std::fs::write(instance_file, json)?;
+    // 执行迁移
+    let mut conn = conn;
+    migrate(&mut conn).expect("数据库迁移失败");
 
     Ok(())
 }
-
-pub fn run_migrate() {}
