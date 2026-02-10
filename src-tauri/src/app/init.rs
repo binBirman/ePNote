@@ -6,13 +6,6 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-fn ensure_dir(path: &Path) -> Result<(), std::io::Error> {
-    if !path.exists() {
-        std::fs::create_dir_all(path)?;
-    }
-    Ok(())
-}
-
 pub fn init_dataroot(root: PathBuf) -> Result<DataRootContext, InitError> {
     // 1 创建根目录
     ensure_dir(&root)?;
@@ -55,11 +48,24 @@ pub fn init_dataroot(root: PathBuf) -> Result<DataRootContext, InitError> {
     })
 }
 
+fn ensure_dir(path: &Path) -> Result<(), std::io::Error> {
+    if !path.exists() {
+        std::fs::create_dir_all(path)?;
+    }
+    Ok(())
+}
+
 fn init_instance(root: &Path) -> Result<(), InitError> {
     let instance_file = root.join(".instance.json");
 
     if instance_file.exists() {
-        // TODO: 读取 + 校验
+        // 读取并校验 instance 文件
+        let content = std::fs::read_to_string(&instance_file)
+            .map_err(|_| InitError::InstanceError)?;
+        let instance: InstanceFile = serde_json::from_str(&content)
+            .map_err(|_| InitError::InstanceError)?;
+        // 可根据需要添加更详细的校验逻辑
+        // 这里只要能反序列化就认为有效
         return Ok(());
     }
 
