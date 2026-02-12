@@ -4,3 +4,9 @@ use crate::repo::context::RepoContext;
 pub struct MetaRepo {
     ctx: RepoContext,
 }
+
+impl MetaRepo {
+    pub fn new(ctx: RepoContext) -> Self {
+        Self { ctx }
+    }
+}

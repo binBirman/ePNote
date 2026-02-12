@@ -12,5 +12,6 @@ mod tests {
 
 pub use builder::PathBuilder;
 pub use error::{PathError, SanitizeError, StorageError};
+pub use fs::{ensure_parent, move_file};
 pub use layout::StorageLayout;
 pub use types::{LogicalPath, PhysicalPath};

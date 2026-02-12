@@ -26,10 +26,13 @@ tauri = "2.9.5"
 tauri-plugin-log = "2"
 rusqlite = { version = "0.32", features = ["bundled"] }
 thiserror = "1"
-uuid = "1.20.0"
+uuid = { version = "1.20.0", features = ["v4"] }
 sqlx = { version = "0.8.6", features = [
     "sqlite",
     "macros",
     "runtime-tokio-rustls",
     "migrate",
 ] }
+
+[dev-dependencies]
+tempfile = "3"
