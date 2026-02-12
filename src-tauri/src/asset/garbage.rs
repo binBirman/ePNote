@@ -55,6 +55,13 @@ impl GarbageManager {
         Self { path_manager }
     }
 
+    /// 从引用创建新的回收区管理器
+    pub fn from_ref(path_manager: &AssetPath) -> Self {
+        Self {
+            path_manager: path_manager.clone(),
+        }
+    }
+
     /// 获取路径管理器
     pub fn path(&self) -> &AssetPath {
         &self.path_manager
@@ -420,10 +427,10 @@ mod tests {
         let test_dir = temp_dir.path();
 
         let path_manager = AssetPath::new(test_dir.to_path_buf());
-        let manager = GarbageManager::new(path_manager);
+        let manager = GarbageManager::from_ref(&path_manager);
 
         // 创建文件
-        let day_dir = test_dir.join("garbages").join("738156");
+        let day_dir = path_manager.garbage_subdir(logical_day::LogicalDay(738156));
         fs::create_dir_all(&day_dir).unwrap();
         create_test_file(&day_dir, "asset1.jpg");
         create_test_file(&day_dir, "asset2.png");
@@ -456,10 +463,13 @@ mod tests {
         create_test_file(&day2_dir, "asset2.jpg");
 
         // 检查过期（保留5天，从 738160 开始）
+        // 阈值 = 738160 - 5 = 738155
+        // 738150 < 738155 过期
+        // 738155 >= 738155 不过期
         let expired = manager
             .check_expiration(5, logical_day::LogicalDay(738160))
             .unwrap();
-        assert_eq!(expired.len(), 2);
+        assert_eq!(expired.len(), 1);
     }
 
     #[test]

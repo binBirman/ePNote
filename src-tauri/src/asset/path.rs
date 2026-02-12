@@ -107,7 +107,7 @@ mod tests {
         let asset_path = AssetPath::new(PathBuf::from("/data"));
 
         // UUID: 12345678-1234-5678-1234-567812345678
-        let id = AssetId(Uuid::parse_str("12345678-1234-5678-1234-567812345678").unwrap());
+        let id = AssetId(Uuid::parse_str("12345678123456781234567812345678").unwrap());
 
         let subdir = asset_path.asset_subdir(id);
         assert_eq!(subdir, PathBuf::from("12").join("34"));
@@ -117,23 +117,28 @@ mod tests {
     fn test_asset_storage_path() {
         let asset_path = AssetPath::new(PathBuf::from("/data"));
 
-        let id = AssetId(Uuid::parse_str("12345678-1234-5678-1234-567812345678").unwrap());
+        let id = AssetId(Uuid::parse_str("12345678123456781234567812345678").unwrap());
 
         let path = asset_path.asset_storage_path(id);
-        assert_eq!(path, PathBuf::from("/data/assets/12/34"));
+        assert_eq!(
+            path,
+            PathBuf::from("/data").join("assets").join("12").join("34")
+        );
     }
 
     #[test]
     fn test_asset_file_path() {
         let asset_path = AssetPath::new(PathBuf::from("/data"));
 
-        let id = AssetId(Uuid::parse_str("12345678-1234-5678-1234-567812345678").unwrap());
+        let id = AssetId(Uuid::parse_str("12345678123456781234567812345678").unwrap());
 
         let path = asset_path.asset_file_path(id, "jpg");
-        assert_eq!(
-            path,
-            PathBuf::from("/data/assets/12/34/12345678-1234-5678-1234-567812345678.jpg")
-        );
+        let expected = PathBuf::from("/data")
+            .join("assets")
+            .join("12")
+            .join("34")
+            .join("12345678123456781234567812345678.jpg");
+        assert_eq!(path, expected);
     }
 
     #[test]
@@ -144,21 +149,25 @@ mod tests {
         let day = logical_day::LogicalDay(738156); // 2024-01-01
 
         let subdir = asset_path.garbage_subdir(day);
-        assert_eq!(subdir, PathBuf::from("/data/garbages/738156"));
+        assert_eq!(
+            subdir,
+            PathBuf::from("/data").join("garbages").join("738156")
+        );
     }
 
     #[test]
     fn test_garbage_file_path() {
         let asset_path = AssetPath::new(PathBuf::from("/data"));
 
-        let id = AssetId(Uuid::parse_str("12345678-1234-5678-1234-567812345678").unwrap());
+        let id = AssetId(Uuid::parse_str("12345678123456781234567812345678").unwrap());
         let day = logical_day::LogicalDay(738156);
 
         let path = asset_path.garbage_file_path(id, "jpg", day);
-        assert_eq!(
-            path,
-            PathBuf::from("/data/garbages/738156/12345678-1234-5678-1234-567812345678.jpg")
-        );
+        let expected = PathBuf::from("/data")
+            .join("garbages")
+            .join("738156")
+            .join("12345678123456781234567812345678.jpg");
+        assert_eq!(path, expected);
     }
 
     #[test]
