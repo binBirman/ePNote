@@ -3,7 +3,7 @@ pub mod error;
 
 pub mod asset_repo;
 pub mod meta_repo;
-pub mod record_repo;
+pub mod review_repo;
 
 pub mod repo;
 
