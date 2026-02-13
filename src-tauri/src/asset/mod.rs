@@ -17,6 +17,12 @@ pub mod garbage;
 pub mod path;
 pub mod store;
 
+mod tests {
+    mod garbage_test;
+    mod path_test;
+    mod store_test;
+}
+
 pub use garbage::{GarbageEntry, GarbageManager, GarbageStats};
 pub use path::AssetPath;
 pub use store::AssetStore;

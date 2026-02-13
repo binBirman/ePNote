@@ -1,3 +1,4 @@
+use std::ops::Deref;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
@@ -12,6 +13,20 @@ impl PhysicalPath {
 
     pub fn as_path(&self) -> &Path {
         &self.inner
+    }
+}
+
+impl Deref for PhysicalPath {
+    type Target = Path;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_path()
+    }
+}
+
+impl AsRef<Path> for PhysicalPath {
+    fn as_ref(&self) -> &Path {
+        self.as_path()
     }
 }
 

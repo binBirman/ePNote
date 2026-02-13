@@ -25,6 +25,17 @@ pub fn from_timestamp(ts: Timestamp) -> LogicalDay {
     LogicalDay(day_index)
 }
 
+pub fn from_datetime(dt: chrono::NaiveDateTime) -> LogicalDay {
+    let offset = default_offset();
+
+    let shifted =
+        offset.from_local_datetime(&dt).unwrap() - chrono::Duration::hours(DAY_CUTOFF_HOUR);
+
+    let day_index = shifted.date_naive().num_days_from_ce();
+
+    LogicalDay(day_index)
+}
+
 /// 获取逻辑日对应的时间范围（UTC时间戳）
 pub fn range_of_day(day: LogicalDay) -> (Timestamp, Timestamp) {
     let offset = default_offset();
