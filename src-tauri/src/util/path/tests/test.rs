@@ -1,6 +1,4 @@
-use crate::path::sanitize;
-use crate::path::PathBuilder;
-use crate::path::StorageLayout;
+use crate::util::path::{sanitize, PathBuilder, StorageLayout};
 
 #[cfg(test)]
 mod tests {

@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use uuid::Uuid;
 
-use crate::path::{error::PathError, sanitize::sanitize_filename, StorageLayout};
+use crate::util::path::{error::PathError, sanitize::sanitize_filename, StorageLayout};
 
 #[derive(Debug, Clone)]
 pub struct PathBuilder {

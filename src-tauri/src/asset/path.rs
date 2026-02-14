@@ -11,7 +11,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::domain::ids::AssetId;
-use crate::path::{PathBuilder, PathError, StorageLayout};
+use crate::util::path::{PathBuilder, PathError, StorageLayout};
 use crate::util::time::logical_day;
 
 /// Asset 存储路径管理器
@@ -93,97 +93,3 @@ impl AssetPath {
         self.layout.root().join("temp").join(temp_id)
     }
 }
-
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use crate::domain::ids::AssetId;
-//     use uuid::Uuid;
-
-//     #[test]
-//     fn test_asset_subdir() {
-//         let layout = crate::path::StorageLayout::new(PathBuf::from("/data"));
-//         let builder = crate::path::PathBuilder::new(layout.clone());
-//         let asset_path = AssetPath::new(builder);
-
-//         // UUID: 12345678-1234-5678-1234-567812345678
-//         let id = AssetId(Uuid::parse_str("12345678123456781234567812345678").unwrap());
-
-//         let subdir = asset_path.asset_subdir(id);
-//         assert_eq!(subdir, PathBuf::from("12").join("34"));
-//     }
-
-//     #[test]
-//     fn test_asset_storage_path() {
-//         let layout = crate::path::StorageLayout::new(PathBuf::from("/data"));
-//         let builder = crate::path::PathBuilder::new(layout.clone());
-//         let asset_path = AssetPath::new(builder);
-
-//         let id = AssetId(Uuid::parse_str("12345678123456781234567812345678").unwrap());
-
-//         let path = asset_path.asset_storage_path(id);
-//         let expected = PathBuf::from("/data").join("assets").join("12").join("34");
-//         assert_eq!(path.as_path(), expected.as_path());
-//     }
-
-//     #[test]
-//     fn test_asset_file_path() {
-//         let layout = crate::path::StorageLayout::new(PathBuf::from("/data"));
-//         let builder = crate::path::PathBuilder::new(layout.clone());
-//         let asset_path = AssetPath::new(builder);
-
-//         let id = AssetId(Uuid::parse_str("12345678123456781234567812345678").unwrap());
-
-//         let path = asset_path.asset_file_path(id, "jpg").unwrap();
-//         let expected = PathBuf::from("/data")
-//             .join("assets")
-//             .join("12")
-//             .join("34")
-//             .join("12345678123456781234567812345678.jpg");
-//         assert_eq!(path.as_path(), expected.as_path());
-//     }
-
-//     #[test]
-//     fn test_garbage_subdir() {
-//         let layout = crate::path::StorageLayout::new(PathBuf::from("/data"));
-//         let builder = crate::path::PathBuilder::new(layout.clone());
-//         let asset_path = AssetPath::new(builder);
-
-//         // LogicalDay(0) corresponds to 0000-01-01 (before shifting)
-//         let day = logical_day::LogicalDay(738156); // 2024-01-01
-
-//         let subdir = asset_path.garbage_subdir(day);
-//         let expected = PathBuf::from("/data").join("garbages").join("738156");
-//         assert_eq!(subdir.as_path(), expected.as_path());
-//     }
-
-//     #[test]
-//     fn test_garbage_file_path() {
-//         let layout = crate::path::StorageLayout::new(PathBuf::from("/data"));
-//         let builder = crate::path::PathBuilder::new(layout.clone());
-//         let asset_path = AssetPath::new(builder);
-
-//         let id = AssetId(Uuid::parse_str("12345678123456781234567812345678").unwrap());
-//         let day = logical_day::LogicalDay(738156);
-
-//         let path = asset_path.garbage_file_path(id, "jpg", day);
-//         let expected = PathBuf::from("/data")
-//             .join("garbages")
-//             .join("738156")
-//             .join("12345678123456781234567812345678.jpg");
-//         assert_eq!(path.as_path(), expected.as_path());
-//     }
-
-//     #[test]
-//     fn test_temp_path() {
-//         let layout = crate::path::StorageLayout::new(PathBuf::from("/data"));
-//         let builder = crate::path::PathBuilder::new(layout.clone());
-//         let asset_path = AssetPath::new(builder);
-
-//         let path = asset_path.temp_path("upload_123");
-//         assert_eq!(
-//             path.as_path(),
-//             PathBuf::from("/data/temp/upload_123").as_path()
-//         );
-//     }
-// }

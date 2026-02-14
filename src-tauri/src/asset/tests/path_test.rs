@@ -1,13 +1,14 @@
 use crate::asset::AssetPath;
 use crate::domain::ids::AssetId;
+use crate::util::path::*;
 use crate::util::time::*;
 use std::path::PathBuf;
 use uuid::Uuid;
 
 #[test]
 fn test_asset_subdir() {
-    let layout = crate::path::StorageLayout::new(PathBuf::from("/data"));
-    let builder = crate::path::PathBuilder::new(layout.clone());
+    let layout = StorageLayout::new(PathBuf::from("/data"));
+    let builder = PathBuilder::new(layout.clone());
     let asset_path = AssetPath::new(builder);
 
     // UUID: 12345678-1234-5678-1234-567812345678
@@ -19,8 +20,8 @@ fn test_asset_subdir() {
 
 #[test]
 fn test_asset_storage_path() {
-    let layout = crate::path::StorageLayout::new(PathBuf::from("/data"));
-    let builder = crate::path::PathBuilder::new(layout.clone());
+    let layout = StorageLayout::new(PathBuf::from("/data"));
+    let builder = PathBuilder::new(layout.clone());
     let asset_path = AssetPath::new(builder);
 
     let id = AssetId(Uuid::parse_str("12345678123456781234567812345678").unwrap());
@@ -32,8 +33,8 @@ fn test_asset_storage_path() {
 
 #[test]
 fn test_asset_file_path() {
-    let layout = crate::path::StorageLayout::new(PathBuf::from("/data"));
-    let builder = crate::path::PathBuilder::new(layout.clone());
+    let layout = StorageLayout::new(PathBuf::from("/data"));
+    let builder = PathBuilder::new(layout.clone());
     let asset_path = AssetPath::new(builder);
 
     let id = AssetId(Uuid::parse_str("12345678123456781234567812345678").unwrap());
@@ -49,8 +50,8 @@ fn test_asset_file_path() {
 
 #[test]
 fn test_garbage_subdir() {
-    let layout = crate::path::StorageLayout::new(PathBuf::from("/data"));
-    let builder = crate::path::PathBuilder::new(layout.clone());
+    let layout = StorageLayout::new(PathBuf::from("/data"));
+    let builder = PathBuilder::new(layout.clone());
     let asset_path = AssetPath::new(builder);
 
     // Use util::time helper to construct logical day for 2024-01-01
@@ -70,8 +71,8 @@ fn test_garbage_subdir() {
 
 #[test]
 fn test_garbage_file_path() {
-    let layout = crate::path::StorageLayout::new(PathBuf::from("/data"));
-    let builder = crate::path::PathBuilder::new(layout.clone());
+    let layout = StorageLayout::new(PathBuf::from("/data"));
+    let builder = PathBuilder::new(layout.clone());
     let asset_path = AssetPath::new(builder);
 
     let id = AssetId(Uuid::parse_str("12345678123456781234567812345678").unwrap());
@@ -87,8 +88,8 @@ fn test_garbage_file_path() {
 
 #[test]
 fn test_temp_path() {
-    let layout = crate::path::StorageLayout::new(PathBuf::from("/data"));
-    let builder = crate::path::PathBuilder::new(layout.clone());
+    let layout = StorageLayout::new(PathBuf::from("/data"));
+    let builder = PathBuilder::new(layout.clone());
     let asset_path = AssetPath::new(builder);
 
     let path = asset_path.temp_path("upload_123");

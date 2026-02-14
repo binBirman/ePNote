@@ -12,7 +12,7 @@ use uuid::Uuid;
 
 use crate::asset::path::AssetPath;
 use crate::domain::ids::AssetId;
-use crate::path::{ensure_parent, StorageError};
+use crate::util::path::{ensure_parent, move_file, StorageError};
 use std::io::{Error as IoError, ErrorKind as IoErrorKind};
 
 /// Asset 存储管理器
@@ -144,7 +144,7 @@ impl AssetStore {
             .garbage_file_path(asset_id, ext, logical_day);
 
         // 3. 移动文件
-        crate::path::move_file(src_path.as_path(), dst_path.as_path())?;
+        move_file(src_path.as_path(), dst_path.as_path())?;
 
         // 4. 生成相对路径
         let relative_path = dst_path

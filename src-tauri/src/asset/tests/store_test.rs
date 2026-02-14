@@ -1,5 +1,6 @@
 use crate::asset::{AssetPath, AssetStore};
 use crate::domain::*;
+use crate::util::path::*;
 use crate::util::time::*;
 use chrono::TimeZone;
 use chrono::Utc;
@@ -48,8 +49,8 @@ fn test_save_many() {
     let file2 = create_test_file(test_dir, "test2.png");
 
     // 创建存储管理器
-    let layout = crate::path::StorageLayout::new(test_dir.to_path_buf());
-    let builder = crate::path::PathBuilder::new(layout.clone());
+    let layout = StorageLayout::new(test_dir.to_path_buf());
+    let builder = PathBuilder::new(layout.clone());
     let path_manager = AssetPath::new(builder);
     let store = AssetStore::new(path_manager);
 
@@ -72,8 +73,8 @@ fn test_move_to_recycle() {
 
     // 创建并保存测试文件
     let file_path = create_test_file(test_dir, "test.jpg");
-    let layout = crate::path::StorageLayout::new(test_dir.to_path_buf());
-    let builder = crate::path::PathBuilder::new(layout.clone());
+    let layout = StorageLayout::new(test_dir.to_path_buf());
+    let builder = PathBuilder::new(layout.clone());
     let path_manager = AssetPath::new(builder);
     let store = AssetStore::new(path_manager);
 
@@ -101,8 +102,8 @@ fn test_move_to_recycle_nonexistent() {
     let temp_dir = TempDir::new().unwrap();
     let test_dir = temp_dir.path();
 
-    let layout = crate::path::StorageLayout::new(test_dir.to_path_buf());
-    let builder = crate::path::PathBuilder::new(layout.clone());
+    let layout = StorageLayout::new(test_dir.to_path_buf());
+    let builder = PathBuilder::new(layout.clone());
     let path_manager = AssetPath::new(builder);
     let store = AssetStore::new(path_manager);
 
@@ -122,8 +123,8 @@ fn test_read_asset() {
     // 创建测试文件
     let file_path = create_test_file(test_dir, "test.jpg");
 
-    let layout = crate::path::StorageLayout::new(test_dir.to_path_buf());
-    let builder = crate::path::PathBuilder::new(layout.clone());
+    let layout = StorageLayout::new(test_dir.to_path_buf());
+    let builder = PathBuilder::new(layout.clone());
     let path_manager = AssetPath::new(builder);
     let store = AssetStore::new(path_manager);
 
@@ -144,8 +145,8 @@ fn test_delete_file() {
     // 创建测试文件
     let file_path = create_test_file(test_dir, "test.jpg");
 
-    let layout = crate::path::StorageLayout::new(test_dir.to_path_buf());
-    let builder = crate::path::PathBuilder::new(layout.clone());
+    let layout = StorageLayout::new(test_dir.to_path_buf());
+    let builder = PathBuilder::new(layout.clone());
     let path_manager = AssetPath::new(builder);
     let store = AssetStore::new(path_manager);
 
@@ -170,8 +171,8 @@ fn test_move_to_recycle_with_errors() {
 
     // 创建并保存测试文件
     let file_path = create_test_file(test_dir, "test.jpg");
-    let layout = crate::path::StorageLayout::new(test_dir.to_path_buf());
-    let builder = crate::path::PathBuilder::new(layout.clone());
+    let layout = StorageLayout::new(test_dir.to_path_buf());
+    let builder = PathBuilder::new(layout.clone());
     let path_manager = AssetPath::new(builder);
     let store = AssetStore::new(path_manager);
 

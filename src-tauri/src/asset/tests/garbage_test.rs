@@ -1,5 +1,6 @@
 use crate::asset::{AssetPath, GarbageManager};
-use crate::util::time::LogicalDay as LD;
+//use crate::util::time::LogicalDay as LD;
+use crate::util::path::*;
 use crate::util::time::*;
 use chrono::Utc;
 use std::fs::{self, File};
@@ -27,8 +28,8 @@ fn test_scan_garbage_empty() {
     let temp_dir = TempDir::new().unwrap();
     let test_dir = temp_dir.path();
 
-    let layout = crate::path::StorageLayout::new(test_dir.to_path_buf());
-    let builder = crate::path::PathBuilder::new(layout.clone());
+    let layout = StorageLayout::new(test_dir.to_path_buf());
+    let builder = PathBuilder::new(layout.clone());
     let path_manager = AssetPath::new(builder);
     let manager = GarbageManager::new(path_manager);
 
@@ -42,8 +43,8 @@ fn test_scan_garbage_with_files() {
     let temp_dir = TempDir::new().unwrap();
     let test_dir = temp_dir.path();
 
-    let layout = crate::path::StorageLayout::new(test_dir.to_path_buf());
-    let builder = crate::path::PathBuilder::new(layout.clone());
+    let layout = StorageLayout::new(test_dir.to_path_buf());
+    let builder = PathBuilder::new(layout.clone());
     let path_manager = AssetPath::new(builder);
     let manager = GarbageManager::new(path_manager);
 
@@ -65,8 +66,8 @@ fn test_get_stats() {
     let temp_dir = TempDir::new().unwrap();
     let test_dir = temp_dir.path();
 
-    let layout = crate::path::StorageLayout::new(test_dir.to_path_buf());
-    let builder = crate::path::PathBuilder::new(layout.clone());
+    let layout = StorageLayout::new(test_dir.to_path_buf());
+    let builder = PathBuilder::new(layout.clone());
     let path_manager = AssetPath::new(builder);
     let manager = GarbageManager::new(path_manager);
 
@@ -102,8 +103,8 @@ fn test_cleanup_before() {
     let temp_dir = TempDir::new().unwrap();
     let test_dir = temp_dir.path();
 
-    let layout = crate::path::StorageLayout::new(test_dir.to_path_buf());
-    let builder = crate::path::PathBuilder::new(layout.clone());
+    let layout = StorageLayout::new(test_dir.to_path_buf());
+    let builder = PathBuilder::new(layout.clone());
     let path_manager = AssetPath::new(builder);
     let manager = GarbageManager::new(path_manager);
 
@@ -141,8 +142,8 @@ fn test_cleanup_day() {
     let temp_dir = TempDir::new().unwrap();
     let test_dir = temp_dir.path();
 
-    let layout = crate::path::StorageLayout::new(test_dir.to_path_buf());
-    let builder = crate::path::PathBuilder::new(layout.clone());
+    let layout = StorageLayout::new(test_dir.to_path_buf());
+    let builder = PathBuilder::new(layout.clone());
     let path_manager = AssetPath::new(builder);
     let manager = GarbageManager::from_ref(&path_manager);
 
@@ -167,8 +168,8 @@ fn test_check_expiration() {
     let temp_dir = TempDir::new().unwrap();
     let test_dir = temp_dir.path();
 
-    let layout = crate::path::StorageLayout::new(test_dir.to_path_buf());
-    let builder = crate::path::PathBuilder::new(layout.clone());
+    let layout = StorageLayout::new(test_dir.to_path_buf());
+    let builder = PathBuilder::new(layout.clone());
     let path_manager = AssetPath::new(builder);
     let manager = GarbageManager::new(path_manager);
 
@@ -196,8 +197,8 @@ fn test_expired_size() {
     let temp_dir = TempDir::new().unwrap();
     let test_dir = temp_dir.path();
 
-    let layout = crate::path::StorageLayout::new(test_dir.to_path_buf());
-    let builder = crate::path::PathBuilder::new(layout.clone());
+    let layout = StorageLayout::new(test_dir.to_path_buf());
+    let builder = PathBuilder::new(layout.clone());
     let path_manager = AssetPath::new(builder);
     let manager = GarbageManager::new(path_manager);
 

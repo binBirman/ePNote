@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 use uuid::Uuid;
 
-use crate::path::sanitize::sanitize_filename;
-use crate::path::{PathBuilder, StorageLayout};
+use crate::util::path::sanitize::sanitize_filename;
+use crate::util::path::{PathBuilder, StorageLayout};
 
 //
 // ==============================

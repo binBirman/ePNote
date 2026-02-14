@@ -24,20 +24,19 @@ pub enum AssetType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MetaKey {
-    System(SystemMetaKey),
-    Extension(ExtensionMetaKey),
-    User(String),
+    System(SystemMetaKey),       // 系统定义且必要的元信息
+    Extension(ExtensionMetaKey), // 系统定义且可选的扩展元信息
+    User(String),                // 用户自定义的元信息
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SystemMetaKey {
-    SourcePaper,
-    Subject,
-    KnowledgePoint,
+    Subject,        // 科目
+    KnowledgePoint, // 知识点
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExtensionMetaKey {
-    Difficulty,
-    TeacherComment,
+    SourcePaper, // 试卷来源
+    Difficulty,  // 难度等级
 }

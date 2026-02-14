@@ -1,4 +1,4 @@
-use crate::path::error::SanitizeError;
+use crate::util::path::error::SanitizeError;
 
 const WINDOWS_RESERVED: &[&str] = &[
     "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",

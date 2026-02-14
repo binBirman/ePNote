@@ -1,11 +1,11 @@
 #[derive(Debug, thiserror::Error)]
 pub enum PathErrorEnum {
     #[error(transparent)]
-    PathError(#[from] crate::path::PathError),
+    PathError(#[from] crate::util::path::PathError),
     #[error(transparent)]
-    SanitizeError(#[from] crate::path::SanitizeError),
+    SanitizeError(#[from] crate::util::path::SanitizeError),
     #[error(transparent)]
-    StorageError(#[from] crate::path::StorageError),
+    StorageError(#[from] crate::util::path::StorageError),
 }
 
 #[derive(Debug, thiserror::Error)]
