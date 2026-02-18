@@ -3,9 +3,7 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum SanitizeError {
-
     // 下面结构错误类用于进行业务约束
-
     #[error("empty input")]
     Empty,
 
@@ -13,7 +11,6 @@ pub enum SanitizeError {
     HiddenFile,
 
     // 下面几个错误类用于防御攻击
-
     #[error("path traversal detected")] //防止目录逃逸攻击，需被安全日志记录
     PathTraversal,
 
@@ -21,7 +18,6 @@ pub enum SanitizeError {
     IllegalChar,
 
     // 下面几个错误类用于防止不可预测的系统行为
-
     #[error("trailing dot not allowed")]
     TrailingDot, // 处理Windows路径末尾点导致的异常
 
@@ -30,9 +26,21 @@ pub enum SanitizeError {
 }
 
 #[derive(Debug, Error)]
+pub enum LogicalPathError {
+    #[error("empty path")]
+    Empty,
+
+    #[error("empty namespace")]
+    EmptyNamespace,
+}
+
+#[derive(Debug, Error)]
 pub enum PathError {
     #[error("sanitize error: {0}")]
     Sanitize(#[from] SanitizeError),
+
+    #[error("logical path parse error: {0}")]
+    ParseLogical(#[from] LogicalPathError),
 }
 
 #[derive(Debug, Error)]

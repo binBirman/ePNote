@@ -10,7 +10,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
-use crate::asset::path::AssetPath;
+use crate::asset::asset_path::AssetPath;
 use crate::domain::ids::AssetId;
 use crate::util::path::{ensure_parent, move_file, StorageError};
 use std::io::{Error as IoError, ErrorKind as IoErrorKind};

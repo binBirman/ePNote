@@ -1,3 +1,5 @@
+//！ 物理地址，专用于存储文件在文件系统中的实际路径，提供一些路径相关的操作和验证功能。
+
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 
@@ -28,10 +30,4 @@ impl AsRef<Path> for PhysicalPath {
     fn as_ref(&self) -> &Path {
         self.as_path()
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct LogicalPath {
-    pub namespace: String, // 顶层挂载点
-    pub key: String,       // 该挂载点下的相对路径
 }

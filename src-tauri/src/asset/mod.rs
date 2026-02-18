@@ -13,16 +13,16 @@
 //! - 所有时间使用 LogicalDay
 //! - Asset 删除进入回收区，不允许自动删除
 
+pub mod asset_path;
 pub mod garbage;
-pub mod path;
 pub mod store;
 
 mod tests {
+    mod asset_path_test;
     mod garbage_test;
-    mod path_test;
     mod store_test;
 }
 
+pub use asset_path::AssetPath;
 pub use garbage::{GarbageEntry, GarbageManager, GarbageStats};
-pub use path::AssetPath;
 pub use store::AssetStore;

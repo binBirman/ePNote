@@ -1,6 +1,6 @@
-use crate::domain::enums::*;
-use crate::domain::ids::*;
-use crate::util::time::*;
+use crate::domain::enums::QuestionState;
+use crate::domain::ids::QuestionId;
+use crate::util::time::Timestamp;
 
 #[derive(Debug, Clone)]
 pub struct Question {
