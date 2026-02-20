@@ -11,14 +11,17 @@ pub struct LogicalPath {
 }
 
 impl LogicalPath {
+    /// 创建一个新的 `LogicalPath`，不做额外校验。
     pub fn new(inner: PathBuf) -> Self {
         Self { inner }
     }
 
+    /// 返回内部 `Path` 引用，用于文件系统相关操作。
     pub fn as_path(&self) -> &Path {
         &self.inner
     }
 
+    /// 将逻辑路径以字符串形式返回（UTF-8 宽松转换）。
     pub fn as_str(&self) -> String {
         self.inner.to_string_lossy().into_owned()
     }
@@ -30,6 +33,7 @@ impl TryFrom<&str> for LogicalPath {
         // 执行 sanitize/验证/规范化
         let p = PathBuf::from(s);
         if p.components().any(|c| c == std::path::Component::ParentDir) {
+            // 若包含上级目录组件，则视为路径穿越攻击
             return Err(SanitizeError::PathTraversal.into());
         }
         Ok(LogicalPath::new(p))
