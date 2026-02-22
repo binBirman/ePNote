@@ -6,220 +6,174 @@
 //!     - 移动到回收区
 //!     - 生成资源路径
 
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+use std::time::SystemTime;
+
 use uuid::Uuid;
 
-use crate::asset::asset_path::AssetPath;
-use crate::domain::ids::AssetId;
-use crate::util::path::{ensure_parent, move_file, StorageError};
-use std::io::{Error as IoError, ErrorKind as IoErrorKind};
+use crate::asset::error::StorageError;
+use crate::asset::fs::move_file;
+use crate::asset::path::{PathBuilder, StorageLayout};
 
-/// Asset 存储管理器
-///
-/// 负责文件的物理存储操作，不包含业务逻辑
+/// 资源元数据（纯文件系统信息，不包含业务引用）
 #[derive(Debug, Clone)]
+pub struct AssetMeta {
+    pub id: Uuid,
+    /// 存储中的相对路径（相对于 `AssetStore.root`）
+    pub relative_path: PathBuf,
+    pub size: u64,
+    pub ext: String,
+    pub created_at: SystemTime,
+}
+
+// 回收区条目不再使用独立结构，接口改为使用元组 `(id, ext, recycle_relative)`。
+
+/// Asset 存储
 pub struct AssetStore {
-    path_manager: AssetPath,
+    root: PathBuf,
+    builder: PathBuilder,
 }
 
 impl AssetStore {
-    /// 创建新的存储管理器
-    pub fn new(path_manager: AssetPath) -> Self {
-        Self { path_manager }
+    /// 使用存储根目录创建 `AssetStore`。
+    pub fn new(root: PathBuf) -> Self {
+        let layout = StorageLayout::new(root.clone());
+        let builder = PathBuilder::new(layout);
+
+        Self { root, builder }
     }
 
-    /// 获取路径管理器
-    pub fn path(&self) -> &AssetPath {
-        &self.path_manager
+    /// 返回存储根目录（绝对路径）
+    pub fn root(&self) -> &PathBuf {
+        &self.root
     }
 
-    /// 从路径提取扩展名
+    /// 保存多个文件到存储中。行为：为每个源文件生成文件名，并将文件移动到存储下。
+    /// 返回对应的 `AssetMeta` 列表。
     ///
-    /// 返回小写的扩展名（不含点号），如果没有扩展名则返回空字符串
-    pub(crate) fn extract_extension(file_path: &Path) -> String {
-        file_path
-            .extension()
-            .and_then(|ext| ext.to_str())
-            .map(|s| s.to_lowercase())
-            .unwrap_or_default()
-    }
+    /// 注意：方法会移动源文件（如需保留请在调用前复制）。
+    pub fn save_many(&self, src_paths: &[PathBuf]) -> Result<Vec<AssetMeta>, StorageError> {
+        let mut metas = Vec::with_capacity(src_paths.len());
 
-    /// 保存多个文件到存储
-    ///
-    /// 参数：
-    ///   - file_paths: 原始文件路径列表
-    ///
-    /// 返回：
-    ///   - Vec<AssetId>: 生成的 AssetId 列表
-    ///   - Vec<String>: 存储后的相对路径列表
-    ///
-    /// 过程：
-    ///   1. 为每个文件生成 AssetId (UUID)
-    ///   2. 计算存储路径
-    ///   3. 确保目录存在
-    ///   4. 复制文件到存储位置
-    pub fn save_many(
-        &self,
-        file_paths: &[PathBuf],
-    ) -> Result<(Vec<AssetId>, Vec<String>), StorageError> {
-        let mut asset_ids = Vec::with_capacity(file_paths.len());
-        let mut stored_paths = Vec::with_capacity(file_paths.len());
+        for src in src_paths {
+            // 1. 生成 id 和扩展名
+            let id = Uuid::new_v4();
+            let ext = src
+                .extension()
+                .and_then(|s| s.to_str())
+                .unwrap_or("bin")
+                .to_string();
 
-        for src_path in file_paths {
-            let result = self.save_one(src_path)?;
-            asset_ids.push(result.0);
-            stored_paths.push(result.1);
+            // 2. 生成目标相对路径（相对于 root），使用 PathBuilder 来生成 timestamped 文件名
+            let dst_rel = self
+                .builder
+                .build_asset_path(&id, &ext)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e.to_string()))
+                .map_err(StorageError::Io)?;
+
+            // 将相对路径转换为绝对路径（基于 store root）并移动文件到目标（会创建父目录）
+            let dst = self.root.join(&dst_rel);
+            move_file(src.as_path(), &dst)?;
+
+            // 4. 获取元信息
+            let md = std::fs::metadata(&dst)?;
+            let size = md.len();
+            let created_at = md.modified().unwrap_or(SystemTime::now());
+            
+            // 5. 记录相对路径（相对于 root）
+            let relative = dst_rel;
+
+            metas.push(AssetMeta {
+                id,
+                relative_path: relative,
+                size,
+                ext,
+                created_at,
+            });
         }
 
-        Ok((asset_ids, stored_paths))
+        Ok(metas)
     }
 
-    /// 保存单个文件到存储
-    ///
-    /// 返回：
-    ///   - AssetId: 生成的 AssetId
-    ///   - String: 存储后的相对路径（相对于 root）
-    pub(crate) fn save_one(&self, src_path: &Path) -> Result<(AssetId, String), StorageError> {
-        // 1. 生成 AssetId
-        let asset_id = AssetId(Uuid::new_v4());
-
-        // 2. 提取扩展名
-        let ext = Self::extract_extension(src_path);
-
-        // 3. 计算存储路径
-        let dst_path = self
-            .path_manager
-            .asset_file_path(asset_id, &ext)
-            .map_err(|e| StorageError::Io(IoError::new(IoErrorKind::Other, e.to_string())))?;
-
-        // 4. 确保目录存在
-        ensure_parent(dst_path.as_path())?;
-
-        // 5. 复制文件
-        fs::copy(src_path, dst_path.as_path())?;
-
-        // 6. 生成相对路径
-        let relative_path = dst_path
-            .as_path()
-            .strip_prefix(self.path_manager.root())
-            .map(|p| p.to_string_lossy().to_string())
-            .unwrap_or_else(|_| dst_path.as_path().to_string_lossy().to_string());
-
-        Ok((asset_id, relative_path))
-    }
-
-    /// 移动单个 Asset 到回收区
-    ///
-    /// 参数：
-    ///   - asset_id: Asset ID
-    ///   - ext: 文件扩展名
-    ///   - logical_day: 回收逻辑日
-    ///
-    /// 返回：
-    ///   - String: 回收后的相对路径
-    pub fn move_to_recycle_one(
-        &self,
-        asset_id: AssetId,
-        ext: &str,
-        logical_day: crate::util::time::logical_day::LogicalDay,
-    ) -> Result<String, StorageError> {
-        // 1. 获取源路径
-        let src_path = self
-            .path_manager
-            .asset_file_path(asset_id, ext)
-            .map_err(|e| StorageError::Io(IoError::new(IoErrorKind::Other, e.to_string())))?;
-
-        // 检查源文件是否存在
-        if !src_path.as_path().exists() {
-            return Err(StorageError::Io(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                format!("Asset file not found: {:?}", src_path.as_path()),
-            )));
-        }
-
-        // 2. 计算目标路径
-        let dst_path = self
-            .path_manager
-            .garbage_file_path(asset_id, ext, logical_day);
-
-        // 3. 移动文件
-        move_file(src_path.as_path(), dst_path.as_path())?;
-
-        // 4. 生成相对路径
-        let relative_path = dst_path
-            .as_path()
-            .strip_prefix(self.path_manager.root())
-            .map(|p| p.to_string_lossy().to_string())
-            .unwrap_or_else(|_| dst_path.as_path().to_string_lossy().to_string());
-
-        Ok(relative_path)
-    }
-
-    /// 移动多个 Asset 到回收区
-    ///
-    /// 参数：
-    ///   - assets: Asset 列表，包含 id 和原始路径
-    ///   - logical_day: 回收逻辑日
-    ///
-    /// 返回：
-    ///   - Vec<String>: 回收后的相对路径列表
-    ///
-    /// 注意：
-    ///   - 从原始路径提取扩展名
-    ///   - 如果某个文件移动失败，继续处理剩余文件
-    ///   - 返回成功的路径和错误信息
+    /// 将给定的资源移动到回收区，返回生成的 `RecycleEntry` 列表。
     pub fn move_to_recycle(
         &self,
-        assets: &[(AssetId, String)],
-        logical_day: crate::util::time::logical_day::LogicalDay,
-    ) -> Result<(Vec<String>, Vec<(AssetId, StorageError)>), StorageError> {
-        let mut success_paths = Vec::new();
-        let mut errors = Vec::new();
+        assets: &[AssetMeta],
+    ) -> Result<Vec<(Uuid, String, PathBuf)>, StorageError> {
+        let mut res = Vec::with_capacity(assets.len());
 
-        for (asset_id, original_path) in assets {
-            let ext = Self::extract_extension(Path::new(original_path));
+        for a in assets {
+            let src = self.root.join(&a.relative_path);
 
-            match self.move_to_recycle_one(*asset_id, &ext, logical_day) {
-                Ok(path) => success_paths.push(path),
-                Err(e) => errors.push((*asset_id, e)),
+            // 回收目录: {root}/garbages/{timestamp}/{filename}
+            let ts = chrono::Utc::now().format("%Y%m%d%H%M%S").to_string();
+            let recycle_dir = self.root.join("garbages").join(ts);
+            let filename = src
+                .file_name()
+                .map(|s| s.to_os_string())
+                .unwrap_or_else(|| a.id.to_string().into());
+            let dst = recycle_dir.join(filename);
+
+            move_file(&src, &dst)?;
+
+            let recycle_relative = dst
+                .strip_prefix(&self.root)
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|_| dst.clone());
+
+            res.push((a.id, a.ext.clone(), recycle_relative));
+        }
+
+        Ok(res)
+    }
+
+    /// 从回收区恢复文件到其原始相对路径（由 `move_to_recycle` 保存的 `original_relative` 字段）。
+    /// 返回恢复后的 `AssetMeta` 列表。
+    pub fn restore(
+        &self,
+        entries: &[(Uuid, String, PathBuf)],
+    ) -> Result<Vec<AssetMeta>, StorageError> {
+        let mut res = Vec::with_capacity(entries.len());
+
+        for (id, ext, recycle_relative) in entries {
+            let src = self.root.join(recycle_relative);
+            // 重新计算目标相对路径，使用 PathBuilder 生成 timestamped 文件名
+            let dst_rel = self
+                .builder
+                .build_asset_path(id, ext)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e.to_string()))
+                .map_err(StorageError::Io)?;
+
+            // 目标绝对路径
+            let dst = self.root.join(&dst_rel);
+            move_file(&src, &dst)?;
+
+            let md = std::fs::metadata(&dst)?;
+            let size = md.len();
+            let created_at = md.modified().unwrap_or(SystemTime::now());
+
+            let relative = dst_rel;
+
+            res.push(AssetMeta {
+                id: *id,
+                relative_path: relative,
+                size,
+                ext: ext.clone(),
+                created_at,
+            });
+        }
+
+        Ok(res)
+    }
+
+    /// 物理删除回收区中的指定条目（从存储根目录中删除回收路径文件）。
+    pub fn delete_physical(&self, entries: &[(Uuid, String, PathBuf)]) -> Result<(), StorageError> {
+        for (_id, _ext, recycle_relative) in entries {
+            let p = self.root.join(recycle_relative);
+            if p.exists() {
+                std::fs::remove_file(&p)?;
             }
         }
-
-        Ok((success_paths, errors))
-    }
-
-    /// 读取 Asset 文件内容
-    ///
-    /// 参数：
-    ///   - asset_id: Asset ID
-    ///   - ext: 文件扩展名
-    pub fn read_asset(&self, asset_id: AssetId, ext: &str) -> Result<Vec<u8>, StorageError> {
-        let path = self
-            .path_manager
-            .asset_file_path(asset_id, ext)
-            .map_err(|e| StorageError::Io(IoError::new(IoErrorKind::Other, e.to_string())))?;
-        Ok(fs::read(path.as_path())?)
-    }
-
-    /// 删除 Asset 文件（用于临时文件等场景）
-    ///
-    /// 警告：
-    ///   - 正常删除应使用 move_to_recycle
-    ///   - 此方法直接删除文件，不进入回收区
-    pub fn delete_file(&self, asset_id: AssetId, ext: &str) -> Result<(), StorageError> {
-        let path = self
-            .path_manager
-            .asset_file_path(asset_id, ext)
-            .map_err(|e| StorageError::Io(IoError::new(IoErrorKind::Other, e.to_string())))?;
-        Ok(fs::remove_file(path.as_path())?)
-    }
-
-    /// 检查 Asset 文件是否存在
-    pub fn asset_exists(&self, asset_id: AssetId, ext: &str) -> bool {
-        match self.path_manager.asset_file_path(asset_id, ext) {
-            Ok(p) => p.as_path().exists(),
-            Err(_) => false,
-        }
+        Ok(())
     }
 }

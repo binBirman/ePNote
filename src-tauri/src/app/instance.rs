@@ -13,21 +13,11 @@ pub fn init_dataroot(root: PathBuf) -> Result<DataRootContext, InitError> {
     let exports_dir = root.join("exports");
     let backups_dir = root.join("backups");
 
-    let question_dir = assets_dir.join("question");
-    let answer_dir = assets_dir.join("answer");
-    let explain_dir = assets_dir.join("explain");
-    let other_dir = assets_dir.join("other");
-
     // 3 创建目录
     ensure_dir(&assets_dir)?;
     ensure_dir(&trash_dir)?;
     ensure_dir(&exports_dir)?;
     ensure_dir(&backups_dir)?;
-
-    ensure_dir(&question_dir)?;
-    ensure_dir(&answer_dir)?;
-    ensure_dir(&explain_dir)?;
-    ensure_dir(&other_dir)?;
 
     // 4 instance.json
     init_instance(&root)?;

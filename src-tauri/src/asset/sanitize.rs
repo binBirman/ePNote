@@ -1,4 +1,4 @@
-use crate::util::path::error::SanitizeError;
+use crate::asset::error::SanitizeError;
 
 /// Windows 下的一些保留文件名，需要拒绝
 const WINDOWS_RESERVED: &[&str] = &[

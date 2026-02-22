@@ -1,23 +1,13 @@
 #[derive(Debug, thiserror::Error)]
-pub enum PathErrorEnum {
-    #[error(transparent)]
-    PathError(#[from] crate::util::path::PathError),
-    #[error(transparent)]
-    SanitizeError(#[from] crate::util::path::SanitizeError),
-    #[error(transparent)]
-    StorageError(#[from] crate::util::path::StorageError),
-}
-
-#[derive(Debug, thiserror::Error)]
 pub enum AppError {
-    #[error(transparent)]
-    Path(#[from] PathErrorEnum),
-
     #[error(transparent)]
     Db(#[from] crate::db::error::DbError),
 
+    #[error(transparent)]
+    Path(#[from] crate::asset::error::PathError),
+
     // #[error(transparent)]
-    // Repo(#[from] RepoError),
+    // Repo(#[from] crate::repo::error::RepoError),
     #[error("invalid input: {0}")]
     InvalidInput(String),
 

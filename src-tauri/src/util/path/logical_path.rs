@@ -1,7 +1,7 @@
 //! 逻辑地址，专用于存储文件相对于根目录的路径，提供一些路径相关的操作和验证功能。
 
-use crate::util::path::error::SanitizeError;
-use crate::util::path::PathError;
+use crate::asset::error::PathError;
+use crate::asset::error::SanitizeError;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 
