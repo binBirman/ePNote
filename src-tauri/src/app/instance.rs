@@ -9,7 +9,7 @@ pub fn init_dataroot(root: PathBuf) -> Result<DataRootContext, InitError> {
 
     // 2 定义结构
     let assets_dir = root.join("assets");
-    let trash_dir = root.join("trash");
+    let trash_dir = root.join("garbages");
     let exports_dir = root.join("exports");
     let backups_dir = root.join("backups");
 
