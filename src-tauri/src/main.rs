@@ -1,19 +1,27 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use ePNote::app::*;
-use std::path::PathBuf;
+use ePNote::app as applib;
+
+#[tauri::command]
+fn tauri_init_note(root: String) -> Result<(), String> {
+    applib::tauri_init_note(root)
+}
+
+#[tauri::command]
+fn tauri_check_init_default() -> Result<applib::InitStatus, String> {
+    match applib::tauri_check_init_default() {
+        Ok(s) => Ok(s),
+        Err(e) => Err(e),
+    }
+}
 
 fn main() {
-    let root = PathBuf::from("D:\\chb\\APPData\\ePNote\\DataRoot"); // 暂时固定路径 ，后续可改为配置项或命令行参数
-
-    // 初始化数据根目录，执行instance校验，获取上下文
-    let ctx = init_dataroot(root.clone()).expect("初始化数据目录失败");
-
-    // 打开数据库
-    let conn = rusqlite::Connection::open(&ctx.db_path).expect("无法打开数据库");
-
-    // 执行迁移
-    let mut conn = conn;
-    ePNote::db::migrate::migrate(&mut conn).expect("数据库迁移失败");
+    tauri::Builder::default()
+        .invoke_handler(tauri::generate_handler![
+            tauri_init_note,
+            tauri_check_init_default
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
 }

@@ -19,6 +19,12 @@ pub struct InstanceFile {
     pub created_at: i64,
 }
 
+#[derive(Serialize)]
+pub struct InitStatus {
+    pub initialized: bool,
+    pub root: Option<String>,
+}
+
 impl Default for InstanceFile {
     fn default() -> Self {
         Self {

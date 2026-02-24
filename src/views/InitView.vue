@@ -1,20 +1,46 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { mockInit, selectedDirectory } from '../mock/data'
+import { mockInit } from '../mock/data'
 
 const router = useRouter()
 const mockPath = ref('')
+const loading = ref(false)
+const error = ref('')
 
-const selectDirectory = () => {
-  // Mock 文件选择，返回一个模拟路径
-  mockPath.value = 'D:/错题本资源'
+const selectDirectory = async () => {
+  // 在 Tauri 环境下尝试使用系统目录选择器
+  try {
+    const pkg = '@tauri-apps/api'
+    const { open } = await import((pkg as unknown as string) + '/dialog')
+    // 打开文件夹选择对话框
+    const path = await open({ directory: true })
+    if (typeof path === 'string' && path) {
+      mockPath.value = path
+      return
+    }
+    // 在某些平台 open 可能返回数组
+    if (Array.isArray(path) && path.length > 0) {
+      mockPath.value = path[0]
+      return
+    }
+  } catch (e) {
+    // 非 Tauri 环境或导入失败，退回到 mock 路径
+    mockPath.value = 'D:/错题本资源'
+  }
 }
 
-const handleInit = () => {
-  if (mockPath.value) {
-    mockInit(mockPath.value)
+const handleInit = async () => {
+  if (!mockPath.value) return
+  loading.value = true
+  error.value = ''
+  try {
+    await mockInit(mockPath.value)
     router.push('/review')
+  } catch (e: any) {
+    error.value = (e && e.message) ? e.message : '初始化失败，请检查路径或查看日志'
+  } finally {
+    loading.value = false
   }
 }
 </script>
@@ -34,23 +60,23 @@ const handleInit = () => {
             v-model="mockPath"
             type="text"
             class="directory-input"
-            placeholder="点击按钮选择目录"
-            readonly
+            placeholder="手动输入或点击按钮选择目录"
           />
           <button class="select-btn" @click="selectDirectory">选择目录</button>
         </div>
         <p v-if="mockPath" class="selected-path">
           已选择：{{ mockPath }}
         </p>
+        <p v-if="error" class="error-msg">{{ error }}</p>
       </div>
 
       <button
         class="init-btn"
-        :disabled="!mockPath"
-        :class="{ disabled: !mockPath }"
+        :disabled="!mockPath || loading"
+        :class="{ disabled: !mockPath || loading }"
         @click="handleInit"
       >
-        初始化系统
+        {{ loading ? '初始化中...' : '初始化系统' }}
       </button>
     </div>
   </div>

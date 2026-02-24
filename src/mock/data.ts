@@ -102,10 +102,29 @@ export const mockStats: Stats = {
 export let initialized = false
 export let selectedDirectory = ''
 
+export function setInitialized(flag: boolean, root?: string) {
+  initialized = flag
+  if (root) selectedDirectory = root
+}
+
 // 模拟初始化
-export function mockInit(directory: string) {
-  selectedDirectory = directory
-  initialized = true
+export async function mockInit(directory: string) {
+  // 如果在 Tauri 环境下，尝试调用后端初始化
+  try {
+    // 动态导入以避免在非 Tauri（浏览器）环境构建时报错
+    // 使用 invoke('tauri_init_note', { root }) 调用后端命令
+
+    const { invoke } = await import('@tauri-apps/api' + '/core')
+    await invoke('tauri_init_note', { root: directory })
+    selectedDirectory = directory
+    initialized = true
+    return
+  } catch {
+    // 非 Tauri 环境或调用失败时回退到本地 mock 行为
+    selectedDirectory = directory
+    initialized = true
+    return
+  }
 }
 
 // 获取题目
@@ -123,7 +142,7 @@ export function addQuestion(question: Omit<Question, 'id' | 'createdDate'>): Que
   const newQuestion: Question = {
     ...question,
     id: Math.max(...mockQuestions.map(q => q.id), 0) + 1,
-    createdDate: new Date().toISOString().split('T')[0]
+    createdDate: new Date().toISOString().split('T')[0]!
   }
   mockQuestions.push(newQuestion)
   return newQuestion
@@ -193,8 +212,11 @@ export function filterRecycleBinBySubject(subject: string | 'ALL'): Question[] {
 export function moveToRecycleBin(id: number): void {
   const index = mockQuestions.findIndex(q => q.id === id)
   if (index !== -1) {
-    const question = mockQuestions.splice(index, 1)[0]
-    question.deletedDate = new Date().toISOString().split('T')[0]
+    const question = mockQuestions[index]
+    if (!question) return
+    // 从原数组移除
+    mockQuestions.splice(index, 1)
+    question.deletedDate = new Date().toISOString().split('T')[0]!
     recycleBin.push(question)
   }
 }
@@ -203,7 +225,10 @@ export function moveToRecycleBin(id: number): void {
 export function restoreFromRecycleBin(id: number): void {
   const index = recycleBin.findIndex(q => q.id === id)
   if (index !== -1) {
-    const question = recycleBin.splice(index, 1)[0]
+    const question = recycleBin[index]
+    if (!question) return
+    // 从回收数组移除
+    recycleBin.splice(index, 1)
     delete question.deletedDate
     mockQuestions.push(question)
   }

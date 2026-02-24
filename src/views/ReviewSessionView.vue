@@ -44,8 +44,11 @@ const toggleAnswer = () => {
 }
 
 const handleReview = (result: ReviewResult) => {
+  const q = currentQuestion.value
+  if (!q) return
+
   reviewResults.value.push({
-    questionId: currentQuestion.value.id,
+    questionId: q.id,
     result
   })
 
@@ -64,7 +67,7 @@ const goBack = () => {
 
 <template>
   <div class="session-container">
-    <div v-if="!isComplete" class="review-session">
+    <div v-if="!isComplete && currentQuestion" class="review-session">
       <!-- 顶部进度 -->
       <div class="progress-bar">
         <div class="progress-info">{{ progress }}</div>

@@ -4,14 +4,15 @@ use crate::app::types::*;
 use std::path::{Path, PathBuf};
 
 pub fn init_dataroot(root: PathBuf) -> Result<DataRootContext, InitError> {
-    // 1 创建根目录
-    ensure_dir(&root)?;
+    // 1 创建根目录下的 DataRoot 目录（所有数据都放到 root/DataRoot 下）
+    let data_root = root.join("DataRoot");
+    ensure_dir(&data_root)?;
 
-    // 2 定义结构
-    let assets_dir = root.join("assets");
-    let trash_dir = root.join("garbages");
-    let exports_dir = root.join("exports");
-    let backups_dir = root.join("backups");
+    // 2 定义结构（全部位于 data_root 下）
+    let assets_dir = data_root.join("assets");
+    let trash_dir = data_root.join("garbages");
+    let exports_dir = data_root.join("exports");
+    let backups_dir = data_root.join("backups");
 
     // 3 创建目录
     ensure_dir(&assets_dir)?;
@@ -19,14 +20,14 @@ pub fn init_dataroot(root: PathBuf) -> Result<DataRootContext, InitError> {
     ensure_dir(&exports_dir)?;
     ensure_dir(&backups_dir)?;
 
-    // 4 instance.json
-    init_instance(&root)?;
+    // 4 instance.json 写入到 data_root
+    init_instance(&data_root)?;
 
-    // 5 DB 路径
-    let db_path = root.join("db.sqlite");
+    // 5 DB 路径（位于 data_root 下）
+    let db_path = data_root.join("db.sqlite");
 
     Ok(DataRootContext {
-        root,
+        root: data_root,
         assets_dir,
         trash_dir,
         exports_dir,
@@ -63,7 +64,7 @@ fn init_instance(root: &Path) -> Result<(), InitError> {
     Ok(())
 }
 
-fn load_instance(path: &Path) -> Result<InstanceFile, InitError> {
+pub(crate) fn load_instance(path: &Path) -> Result<InstanceFile, InitError> {
     let content = std::fs::read_to_string(path)?;
 
     let instance: InstanceFile =
@@ -72,7 +73,7 @@ fn load_instance(path: &Path) -> Result<InstanceFile, InitError> {
     Ok(instance)
 }
 
-fn validate_instance(instance: &InstanceFile) -> Result<(), InitError> {
+pub(crate) fn validate_instance(instance: &InstanceFile) -> Result<(), InitError> {
     if instance.instance_version == 0 {
         return Err(InitError::InvalidStructure);
     }
