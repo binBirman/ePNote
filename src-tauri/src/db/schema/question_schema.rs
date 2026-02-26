@@ -38,18 +38,6 @@ pub fn insert_question(
     Ok(conn.last_insert_rowid())
 }
 
-/* 删除一条记录 */
-// pub fn delete_question(conn: &Connection, question_id: i64) -> Result<()> {
-//     conn.execute(
-//         r#"
-//         DELETE FROM question
-//         WHERE id = ?1
-//         "#,
-//         (question_id,),
-//     )?;
-//     Ok(())
-// }
-
 /*
     修改题目名
     输入：
@@ -175,10 +163,11 @@ pub fn select_question_by_name(
     输出：
         返回未删除题目列表
 */
+/// 参数顺序为 `(offset, limit)` 以配合上层 DAO 的调用习惯；内部按 SQL 需要传入 `(limit, offset)`。
 pub fn select_questions_page(
     conn: &Connection,
-    limit: i64,
     offset: i64,
+    limit: i64,
 ) -> Result<Vec<QuestionRow>, DbError> {
     let mut stmt = conn.prepare(
         r#"
@@ -190,7 +179,7 @@ pub fn select_questions_page(
         "#,
     )?;
 
-    let iter = stmt.query_map([limit, offset], |row| {
+    let iter = stmt.query_map((limit, offset), |row| {
         Ok(QuestionRow {
             id: row.get(0)?,
             name: row.get(1)?,
@@ -204,33 +193,34 @@ pub fn select_questions_page(
 }
 
 /*
-    列出所有未删除题目（直接搜索全库，慎用！慎用！）
+    列出时间早于某时间戳的已删除题目
     输入：
-        无
+        时间戳
     输出：
-        返回未删除题目列表
+        返回已删除题目列表
 */
-// pub fn select_questions_active(conn: &Connection) -> Result<Vec<QuestionRow>, DbError> {
-//     let mut stmt = conn.prepare(
-//         r#"
-//         SELECT id, name, state, created_at, deleted_at
-//         FROM question
-//         WHERE deleted_at IS NULL
-//         ORDER BY created_at DESC
-//         "#,
-//     )?;
+pub fn select_deleted_questions_before_timestamp(
+    conn: &Connection,
+    timestamp: i64,
+) -> Result<Vec<QuestionRow>, DbError> {
+    let mut stmt = conn.prepare(
+        r#"
+        SELECT id, name, state, created_at, deleted_at
+        FROM question
+        WHERE deleted_at IS NOT NULL AND deleted_at < ?1
+        ORDER BY deleted_at DESC
+        "#,
+    )?;
 
-//     let question_iter = stmt.query_map([], |row| {
-//         Ok(QuestionRow {
-//             id: row.get(0)?,
-//             name: row.get(1)?,
-//             state: row.get(2)?,
-//             created_at: row.get(3)?,
-//             deleted_at: row.get(4)?,
-//         })
-//     })?;
+    let iter = stmt.query_map((timestamp,), |row| {
+        Ok(QuestionRow {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            state: row.get(2)?,
+            created_at: row.get(3)?,
+            deleted_at: row.get(4)?,
+        })
+    })?;
 
-//     question_iter
-//         .collect::<Result<Vec<_>, _>>()
-//         .map_err(Into::into)
-// }
+    iter.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+}

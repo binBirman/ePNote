@@ -7,6 +7,7 @@ pub mod schema {
     pub mod meta_schema;
     pub mod question_schema;
     pub mod review_schema;
+    pub mod view_schema;
 }
 
 pub use connection::*;
@@ -15,6 +16,7 @@ pub use schema::asset_schema::*;
 pub use schema::meta_schema::*;
 pub use schema::question_schema::*;
 pub use schema::review_schema::*;
+pub use schema::view_schema::*;
 
 use rusqlite::Connection;
 use std::path::Path;

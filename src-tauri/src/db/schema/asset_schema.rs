@@ -44,6 +44,20 @@ pub fn delete_asset(conn: &Connection, asset_id: i64, deleted_at: i64) -> Result
     Ok(())
 }
 
+/* 恢复一条记录 */
+pub fn restore_asset(conn: &Connection, asset_id: i64) -> Result<(), DbError> {
+    conn.execute(
+        r#"
+        UPDATE asset
+        SET deleted_at = NULL
+        WHERE id = ?1
+        "#,
+        (asset_id,),
+    )?;
+
+    Ok(())
+}
+
 /* 用ID查找资源 */
 pub fn select_asset_by_id(conn: &Connection, id: i64) -> Result<Option<AssetRow>, DbError> {
     let mut stmt = conn.prepare(

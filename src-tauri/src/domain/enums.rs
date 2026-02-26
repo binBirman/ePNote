@@ -92,12 +92,6 @@ pub enum MetaKey {
     User(String),                // 用户自定义的元信息
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SystemMetaKey {
-    Subject,        // 科目
-    KnowledgePoint, // 知识点
-}
-
 impl MetaKey {
     /// Serialize to string form: `system.<key>` | `extension.<key>` | `user.<key>`
     pub fn as_str(&self) -> String {
@@ -120,6 +114,12 @@ impl MetaKey {
             None
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SystemMetaKey {
+    Subject,        // 科目
+    KnowledgePoint, // 知识点
 }
 
 impl SystemMetaKey {

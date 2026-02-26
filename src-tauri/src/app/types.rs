@@ -29,7 +29,7 @@ impl Default for InstanceFile {
     fn default() -> Self {
         Self {
             instance_version: 1,
-            schema_version: 1,
+            schema_version: 2,
             asset_layout_version: 1,
             created_at: chrono::Utc::now().timestamp(),
         }

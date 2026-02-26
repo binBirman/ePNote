@@ -10,10 +10,11 @@ pub struct Migration {
 }
 
 // 所有迁移，按 version 升序排列
-const MIGRATIONS: &[Migration] = &[Migration {
-    version: 1,
-    name: "init_schema",
-    sql: r#"
+const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 1,
+        name: "init_schema",
+        sql: r#"
         CREATE TABLE IF NOT EXISTS schema_version (
             version INTEGER NOT NULL
         );
@@ -56,7 +57,33 @@ const MIGRATIONS: &[Migration] = &[Migration {
             FOREIGN KEY(question_id) REFERENCES question(id)
         );
         "#,
-}];
+    },
+    Migration {
+        version: 2,
+        name: "show_view",
+        sql: r#"
+        CREATE VIEW IF NOT EXISTS show_view AS
+            SELECT
+                q.id,
+                q.name,
+                q.state,
+                q.created_at,
+                q.deleted_at,
+                m.value AS subject,
+                r.last_reviewed_at AS last_reviewed_at
+            FROM question q
+            LEFT JOIN meta m
+            ON m.question_id = q.id
+            AND m.key = 'sys.subject'
+            LEFT JOIN (
+                SELECT question_id, MAX(reviewed_at) AS last_reviewed_at
+                FROM review
+                GROUP BY question_id
+            ) r ON r.question_id = q.id
+            WHERE q.deleted_at IS NULL;
+        "#,
+    },
+];
 
 /*
     启动时调用，检查当前 schema 版本，依次应用未应用的迁移

@@ -96,3 +96,33 @@ pub fn select_meta_by_question(
 
     meta_iter.collect::<Result<Vec<_>, _>>().map_err(Into::into)
 }
+
+/* 查找某题目某key的元信息 */
+pub fn select_meta_by_question_key(
+    conn: &Connection,
+    question_id: i64,
+    key: &str,
+) -> Result<Option<MetaRow>, DbError> {
+    let mut stmt = conn.prepare(
+        r#"
+        SELECT id, question_id, key, value
+        FROM meta
+        WHERE question_id = ?1 AND key = ?2
+        "#,
+    )?;
+
+    let meta_iter = stmt.query_map((question_id, key), |row| {
+        Ok(MetaRow {
+            id: row.get(0)?,
+            question_id: row.get(1)?,
+            key: row.get(2)?,
+            value: row.get(3)?,
+        })
+    })?;
+
+    for meta in meta_iter {
+        return Ok(Some(meta?));
+    }
+
+    Ok(None)
+}

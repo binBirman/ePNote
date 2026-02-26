@@ -3,11 +3,15 @@ pub mod enums;
 pub mod ids;
 pub mod meta;
 pub mod question;
+pub mod question_info;
 pub mod review;
+pub mod view;
 
 pub use asset::*;
 pub use enums::*;
 pub use ids::*;
 pub use meta::*;
 pub use question::*;
+pub use question_info::*;
 pub use review::*;
+pub use view::*;
