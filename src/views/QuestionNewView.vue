@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { addQuestion } from '../mock/data'
+import { createQuestion } from '@/api/question'
+import { open } from "@tauri-apps/plugin-dialog";
 
 const router = useRouter()
 
@@ -10,8 +11,9 @@ const questionSubject = ref('')
 const questionKnowledgePoint = ref('')
 const questionQuestionImage = ref('')
 const questionAnswerImage = ref('')
+const loading = ref(false)
 
-const handleSubmit = () => {
+const handleSubmit = async () => {
   if (!questionName.value.trim()) {
     alert('请输入题目名')
     return
@@ -37,24 +39,38 @@ const handleSubmit = () => {
     return
   }
 
-  addQuestion({
-    name: questionName.value,
-    subject: questionSubject.value,
-    knowledgePoint: questionKnowledgePoint.value,
-    questionImage: questionQuestionImage.value,
-    answerImage: questionAnswerImage.value,
-    state: 'NEW'
-  })
+  try {
+    console.log('handleSubmit start')
+    loading.value = true
+    await createQuestion({
+      name: questionName.value,
+      subject: questionSubject.value,
+      knowledge_points: questionKnowledgePoint.value
+        ? questionKnowledgePoint.value.split(',').map(s => s.trim()).filter(Boolean)
+        : [],
+      question_image_paths: questionQuestionImage.value ? [questionQuestionImage.value] : [],
+      answer_image_paths: questionAnswerImage.value ? [questionAnswerImage.value] : [],
+    })
 
-  // 清空表单
+    // 清空表单
   questionName.value = ''
   questionSubject.value = ''
   questionKnowledgePoint.value = ''
   questionQuestionImage.value = ''
   questionAnswerImage.value = ''
 
-  alert('题目创建成功！')
-  router.push('/questions')
+    alert('题目创建成功！')
+    router.push({ path: '/questions', query: { r: String(Date.now()) } })
+  } catch (e) {
+    console.error(e)
+    alert('创建题目失败：' + String(e))
+  }
+
+  finally {
+    loading.value = false
+    console.log('handleSubmit end')
+  }
+
 }
 
 const handleCancel = () => {
@@ -67,14 +83,60 @@ const handleCancel = () => {
   router.push('/questions')
 }
 
-const selectQuestionImage = () => {
-  // Mock 文件选择
-  questionQuestionImage.value = `question-${Date.now()}.png`
+const createFileInputFallback = (accept = 'image/*') => {
+  return new Promise<File | null>((resolve) => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = accept
+    input.style.display = 'none'
+    document.body.appendChild(input)
+    input.onchange = () => {
+      const file = input.files && input.files[0]
+      // cleanup
+      setTimeout(() => document.body.removeChild(input), 0)
+      resolve(file || null)
+    }
+    input.click()
+  })
 }
 
-const selectAnswerImage = () => {
-  // Mock 文件选择
-  questionAnswerImage.value = `answer-${Date.now()}.png`
+const selectQuestionImage = async () => {
+  try {
+    // try Tauri dialog first
+    const res = await open({ multiple: false, filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'] }] })
+    if (res) {
+      const path = Array.isArray(res) ? res[0] : res
+      questionQuestionImage.value = path as string
+      return
+    }
+  } catch (e) {
+    // fall through to browser fallback
+    console.debug('tauri open failed, falling back to input file', e)
+  }
+
+  // browser fallback: create input and show preview via object URL
+  const file = await createFileInputFallback('image/*')
+  if (!file) return
+  const url = URL.createObjectURL(file)
+  questionQuestionImage.value = url
+}
+
+const selectAnswerImage = async () => {
+  try {
+    const res = await open({ multiple: false, filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'] }] })
+    if (res) {
+      const path = Array.isArray(res) ? res[0] : res
+      questionAnswerImage.value = path as string
+      return
+    }
+  } catch (e) {
+    console.debug('tauri open failed, falling back to input file', e)
+  }
+
+  const file = await createFileInputFallback('image/*')
+  if (!file) return
+  const url = URL.createObjectURL(file)
+  questionAnswerImage.value = url
 }
 </script>
 

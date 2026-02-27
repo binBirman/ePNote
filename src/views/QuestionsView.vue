@@ -1,23 +1,77 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { getQuestions, getSubjects, filterQuestionsBySubject, filterQuestionsByState, type QuestionState, type Question } from '../mock/data'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import type { ActiveQuestion } from '@/types/question'
+// import type { QuestionState } from '@/types/question'
+import {
+  show_list_available_questions_page,
+  show_list_available_questions_by_state_page,
+  show_list_available_questions_by_subject_page,
+} from '@/api/question'
 
 const router = useRouter()
+const route = useRoute()
 
 const searchKeyword = ref('')
-const stateFilter = ref<QuestionState | 'ALL'>('ALL')
+const stateFilter = ref<'ALL' | 'NEW' | 'LEARNING' | 'STABLE'>('ALL')
 const subjectFilter = ref<string>('ALL')
-const displayedQuestions = ref<Question[]>([])
+const pageSize = 10
+const currentPage = ref(0)
+const hasNext = ref(false)
+interface LocalQuestion {
+  id: number
+  name: string
+  subject: string
+  knowledgePoint: string
+  lastReviewed?: string
+  createdDate?: string
+  state: string
+}
+const displayedQuestions = ref<LocalQuestion[]>([])
 const subjects = ref<string[]>([])
 
 onMounted(() => {
   loadQuestions()
-  subjects.value = getSubjects()
 })
 
-const loadQuestions = () => {
-  displayedQuestions.value = getQuestions()
+watch(() => route.query.r, (v) => {
+  if (v) loadQuestions()
+})
+
+const mapActive = (a: ActiveQuestion): LocalQuestion => ({
+  id: a.id,
+  name: a.title,
+  subject: a.subject || '未知',
+  knowledgePoint: '',
+  lastReviewed: a.last_review || '',
+  createdDate: a.created_at || '',
+  state: a.status || '',
+})
+
+const loadQuestions = async (page = 0) => {
+  try {
+    let res: ActiveQuestion[] = []
+    if (subjectFilter.value !== 'ALL') {
+      res = await show_list_available_questions_by_subject_page(subjectFilter.value, page, pageSize)
+    } else if (stateFilter.value !== 'ALL') {
+      res = await show_list_available_questions_by_state_page(stateFilter.value, page, pageSize)
+    } else {
+      res = await show_list_available_questions_page(page, pageSize)
+    }
+
+    displayedQuestions.value = res.map(mapActive)
+    const set = new Set<string>()
+    displayedQuestions.value.forEach(q => { if (q.subject) set.add(q.subject) })
+    subjects.value = Array.from(set)
+
+    currentPage.value = page
+    hasNext.value = res.length >= pageSize
+  } catch (e) {
+    console.error('加载题目失败', e)
+    displayedQuestions.value = []
+    subjects.value = []
+    hasNext.value = false
+  }
 }
 
 const filteredQuestions = computed(() => {
@@ -56,7 +110,7 @@ const filteredQuestions = computed(() => {
   return filtered
 })
 
-const getStateColor = (state: QuestionState) => {
+const getStateColor = (state: string) => {
   switch (state) {
     case 'NEW':
       return '#2196F3'
@@ -69,7 +123,7 @@ const getStateColor = (state: QuestionState) => {
   }
 }
 
-const getStateLabel = (state: QuestionState) => {
+const getStateLabel = (state: string) => {
   switch (state) {
     case 'NEW':
       return '新题'
@@ -88,6 +142,16 @@ const goToDetail = (id: number) => {
 
 const goToNew = () => {
   router.push('/questions/new')
+}
+
+const prevPage = () => {
+  if (currentPage.value <= 0) return
+  loadQuestions(currentPage.value - 1)
+}
+
+const nextPage = () => {
+  if (!hasNext.value) return
+  loadQuestions(currentPage.value + 1)
 }
 
 const goToRecycleBin = () => {
@@ -165,6 +229,13 @@ const goToRecycleBin = () => {
         <div class="empty-icon">📝</div>
         <p class="empty-text">暂无题目</p>
         <button class="empty-action" @click="goToNew">立即创建</button>
+      </div>
+
+      <!-- 分页控件 -->
+      <div class="pagination" style="display:flex;justify-content:center;gap:12px;margin-top:16px;">
+        <button class="btn" @click="prevPage" :disabled="currentPage === 0">上一页</button>
+        <div style="align-self:center">第 {{ currentPage + 1 }} 页</div>
+        <button class="btn" @click="nextPage" :disabled="!hasNext">下一页</button>
       </div>
     </div>
   </div>

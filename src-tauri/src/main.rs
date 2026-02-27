@@ -9,6 +9,7 @@ use ePNote::dao::Connection;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::async_runtime::Mutex;
+use tauri_plugin_dialog::DialogExt;
 
 fn main() {
     // 准备资源（容错：读取失败时不崩溃，使用默认目录）
@@ -30,10 +31,11 @@ fn main() {
     let conn = Connection::open(root.join("db.sqlite")).unwrap();
     let asset_store = AssetStore::new(root);
 
-    let state = Arc::new(Mutex::new(AppState::new(conn, asset_store)));
+    let state = AppState::new(conn, asset_store);
 
     tauri::Builder::default()
-        .manage(state.clone())
+        .plugin(tauri_plugin_dialog::init())
+        .manage(state)
         .invoke_handler(tauri::generate_handler![
             init_c::tauri_init_note,
             init_c::tauri_check_init_default,
