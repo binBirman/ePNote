@@ -40,6 +40,12 @@ impl TryFrom<&str> for LogicalPath {
     }
 }
 
+impl From<LogicalPath> for String {
+    fn from(lp: LogicalPath) -> Self {
+        lp.as_str()
+    }
+}
+
 impl Deref for LogicalPath {
     type Target = Path;
 

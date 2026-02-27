@@ -21,7 +21,7 @@ pub struct ViewRow {
     输出：
         若找到，返回Some(ViewRow)
 */
-pub fn select_view_by_id(conn: &Connection, id: i64) -> Result<Option<ViewRow>, DbError> {
+pub fn select_view_by_id(conn: &Connection, id: i64) -> Result<ViewRow, DbError> {
     let mut stmt = conn.prepare(
         r#"
         SELECT id, name, state, created_at, deleted_at, subject, last_reviewed_at
@@ -43,10 +43,10 @@ pub fn select_view_by_id(conn: &Connection, id: i64) -> Result<Option<ViewRow>, 
     })?;
 
     for question in question_iter {
-        return Ok(Some(question?));
+        return Ok(question?);
     }
 
-    Ok(None)
+    Err(DbError::NotFound)
 }
 
 /*
@@ -56,7 +56,7 @@ pub fn select_view_by_id(conn: &Connection, id: i64) -> Result<Option<ViewRow>, 
     输出：
         若找到，返回Some(ViewRow)
 */
-pub fn select_view_by_name(conn: &Connection, name: &str) -> Result<Option<ViewRow>, DbError> {
+pub fn select_views_by_name(conn: &Connection, name: &str) -> Result<Vec<ViewRow>, DbError> {
     let mut stmt = conn.prepare(
         r#"
         SELECT id, name, state, created_at, deleted_at, subject, last_reviewed_at
@@ -77,11 +77,16 @@ pub fn select_view_by_name(conn: &Connection, name: &str) -> Result<Option<ViewR
         })
     })?;
 
+    let mut results = Vec::new();
     for question in question_iter {
-        return Ok(Some(question?));
+        results.push(question?);
     }
 
-    Ok(None)
+    if results.is_empty() {
+        Err(DbError::NotFound)
+    } else {
+        Ok(results)
+    }
 }
 
 /*

@@ -1,5 +1,6 @@
 use crate::util::time::timestamp::*;
 use chrono::{Datelike, FixedOffset, TimeZone, Utc};
+use tauri::webview::cookie::time::Time;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct LogicalDay(pub i32);
@@ -12,28 +13,42 @@ fn default_offset() -> FixedOffset {
     FixedOffset::east_opt(8 * 3600).unwrap()
 }
 
-pub fn from_timestamp(ts: Timestamp) -> LogicalDay {
-    let offset = default_offset();
-
-    let dt = offset.timestamp_opt(ts.0, 0).unwrap();
-
-    // 向前移动 3 小时
-    let shifted = dt - chrono::Duration::hours(DAY_CUTOFF_HOUR);
-
-    let day_index = shifted.date_naive().num_days_from_ce();
-
-    LogicalDay(day_index)
+impl LogicalDay {
+    pub fn to_string(&self) -> String {
+        let offset = default_offset();
+        let dt = offset
+            .timestamp_opt((self.0 as i64) * 24 * 3600, 0)
+            .unwrap()
+            + chrono::Duration::hours(DAY_CUTOFF_HOUR);
+        dt.format("%Y-%m-%d").to_string()
+    }
 }
 
-pub fn from_datetime(dt: chrono::NaiveDateTime) -> LogicalDay {
-    let offset = default_offset();
+impl From<Timestamp> for LogicalDay {
+    fn from(ts: Timestamp) -> Self {
+        //from_timestamp(ts)
+        let offset = default_offset();
+        let dt = offset.timestamp_opt(ts.0, 0).unwrap();
 
-    let shifted =
-        offset.from_local_datetime(&dt).unwrap() - chrono::Duration::hours(DAY_CUTOFF_HOUR);
+        // 向前移动 3 小时
+        let shifted = dt - chrono::Duration::hours(DAY_CUTOFF_HOUR);
+        let day_index = shifted.date_naive().num_days_from_ce();
 
-    let day_index = shifted.date_naive().num_days_from_ce();
+        LogicalDay(day_index)
+    }
+}
 
-    LogicalDay(day_index)
+impl From<chrono::NaiveDateTime> for LogicalDay {
+    fn from(dt: chrono::NaiveDateTime) -> Self {
+        let offset = default_offset();
+
+        let shifted =
+            offset.from_local_datetime(&dt).unwrap() - chrono::Duration::hours(DAY_CUTOFF_HOUR);
+
+        let day_index = shifted.date_naive().num_days_from_ce();
+
+        LogicalDay(day_index)
+    }
 }
 
 /// 获取逻辑日对应的时间范围（UTC时间戳）
@@ -55,8 +70,8 @@ pub fn range_of_day(day: LogicalDay) -> (Timestamp, Timestamp) {
 
 // 计算两个时间戳之间的逻辑日差
 pub fn days_since(old: Timestamp, now: Timestamp) -> i32 {
-    let old_day = from_timestamp(old);
-    let now_day = from_timestamp(now);
+    let old_day = LogicalDay::from(old);
+    let now_day = LogicalDay::from(now);
 
     now_day.0 - old_day.0
 }

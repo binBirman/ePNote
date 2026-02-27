@@ -1,0 +1,113 @@
+use rusqlite::Connection;
+use serde::Deserialize;
+use serde::Serialize;
+use tauri::State;
+
+use crate::app::appstate::AppState;
+use crate::dao::ViewDao;
+use crate::domain::{QuestionState, View};
+use crate::server::show_question_view::*;
+use crate::util::time::LogicalDay;
+
+#[derive(Serialize)]
+pub struct ActiveQuestion {
+    pub id: i64,
+    pub subject: String,
+    pub title: String,
+    pub status: String,
+    pub created_at: String,
+    pub last_review: String,
+}
+impl ActiveQuestion {
+    pub fn new(views: Vec<View>) -> Vec<ActiveQuestion> {
+        views
+            .into_iter()
+            .map(|v| Self {
+                id: v.id.into(),
+                subject: v.subject.unwrap_or_default(),
+                title: v.name.unwrap_or_default(),
+                status: v.state.as_str().to_string(),
+                created_at: LogicalDay::from(v.created_at).to_string(),
+                last_review: LogicalDay::from(v.last_reviewed_at).to_string(),
+            })
+            .collect()
+    }
+}
+
+#[derive(Serialize)]
+pub struct DeleteQuestion {
+    pub id: i64,
+    pub subject: String,
+    pub title: String,
+    pub status: String,
+    pub deleted_at: String,
+}
+impl DeleteQuestion {
+    pub fn new(views: Vec<View>) -> Vec<DeleteQuestion> {
+        views
+            .into_iter()
+            .map(|v| Self {
+                id: v.id.into(),
+                subject: v.subject.unwrap_or_default(),
+                title: v.name.unwrap_or_default(),
+                status: v.state.as_str().to_string(),
+                deleted_at: v
+                    .deleted_at
+                    .map(|ts| LogicalDay::from(ts).to_string())
+                    .unwrap_or_default(),
+            })
+            .collect()
+    }
+}
+
+#[tauri::command]
+pub fn show_list_available_questions_page(
+    state: tauri::State<AppState>,
+    page: usize,
+    page_size: usize,
+) -> Result<Vec<ActiveQuestion>, String> {
+    let conn = state.db.lock().unwrap();
+    let views = list_available_questions_page(&conn, page, page_size).unwrap_or_default();
+    let result = ActiveQuestion::new(views);
+    Ok(result)
+}
+
+#[tauri::command]
+pub fn show_list_deleted_questions_page(
+    state: tauri::State<AppState>,
+    page: usize,
+    page_size: usize,
+) -> Result<Vec<DeleteQuestion>, String> {
+    let conn = state.db.lock().unwrap();
+    let views = list_deleted_questions_page(&conn, page, page_size).unwrap_or_default();
+    let result = DeleteQuestion::new(views);
+    Ok(result)
+}
+
+#[tauri::command]
+pub fn show_list_available_questions_by_state_page(
+    state: tauri::State<AppState>,
+    question_state: String,
+    page: usize,
+    page_size: usize,
+) -> Result<Vec<ActiveQuestion>, String> {
+    let conn = state.db.lock().unwrap();
+    let state = QuestionState::try_from(question_state.clone())
+        .map_err(|e| format!("invalid question state: {:?}", e))?;
+    let views = list_questions_by_state_page(&conn, state, page, page_size).unwrap_or_default();
+    let result = ActiveQuestion::new(views);
+    Ok(result)
+}
+
+#[tauri::command]
+pub fn show_list_available_questions_by_subject_page(
+    state: tauri::State<AppState>,
+    subject: String,
+    page: usize,
+    page_size: usize,
+) -> Result<Vec<ActiveQuestion>, String> {
+    let conn = state.db.lock().unwrap();
+    let views = list_questions_by_subject_page(&conn, subject, page, page_size).unwrap_or_default();
+    let result = ActiveQuestion::new(views);
+    Ok(result)
+}

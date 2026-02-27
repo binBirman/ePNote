@@ -22,6 +22,12 @@ impl PhysicalPath {
     }
 }
 
+impl From<PhysicalPath> for String {
+    fn from(pp: PhysicalPath) -> Self {
+        pp.as_path().to_string_lossy().into_owned()
+    }
+}
+
 impl Deref for PhysicalPath {
     type Target = Path;
 

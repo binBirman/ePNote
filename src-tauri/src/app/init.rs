@@ -1,6 +1,7 @@
-use crate::app::error::*;
+use crate::app::config as app_config;
 use crate::app::instance::{init_dataroot, load_instance, validate_instance};
 use crate::app::types::*;
+use crate::app::{self, error::*};
 use crate::asset::store::AssetStore;
 use crate::db::migrate;
 //use crate::db::migrate::migrate;
@@ -22,6 +23,12 @@ pub fn init_note(root: PathBuf) -> Result<(), InitError> {
     // 执行迁移
     let mut conn = conn;
     migrate(&mut conn).expect("数据库迁移失败");
+
+    // 将 root 写入到程序根目录下的 app_config.json，便于下次启动直接读取
+    match app_config::save_root(&root) {
+        Ok(_) => {}
+        Err(_) => return Err(InitError::InstanceError),
+    }
 
     Ok(())
 }
@@ -61,8 +68,9 @@ pub fn check_init(root: PathBuf) -> Result<bool, InitError> {
 }
 
 pub fn tauri_check_init_default() -> Result<crate::app::types::InitStatus, String> {
-    // 默认路径，可按需调整为配置项
-    let root = PathBuf::from("D:\\chb\\APPData\\ePNote\\DataRoot");
+    let root = app_config::load_root()
+        .map_err(|e| e.to_string())?
+        .unwrap_or_else(|| PathBuf::from("data"));
 
     match check_init(root.clone()) {
         Ok(true) => Ok(crate::app::types::InitStatus {

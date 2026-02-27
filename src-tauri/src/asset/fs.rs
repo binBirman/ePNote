@@ -39,6 +39,13 @@ pub fn move_file(src: &Path, dst: &Path) -> Result<(), StorageError> {
     }
 }
 
+/// 将源文件复制到目标路径（保留源文件），使用原子写入保证一致性。
+pub fn copy_file(src: &Path, dst: &Path) -> Result<(), StorageError> {
+    ensure_parent(dst)?;
+    copy_atomic(src, dst).map_err(StorageError::Io)?;
+    Ok(())
+}
+
 /// 将字节写入目标文件，使用临时文件+重命名保证原子性。
 pub fn write_bytes_atomic(dst: &Path, data: &[u8]) -> Result<(), StorageError> {
     ensure_parent(dst)?;

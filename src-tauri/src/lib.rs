@@ -8,5 +8,6 @@ pub mod util {
     pub mod time;
 }
 pub mod app;
+pub mod command;
 pub mod dao;
 pub mod server;

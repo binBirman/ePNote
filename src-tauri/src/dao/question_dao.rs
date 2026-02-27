@@ -1,6 +1,8 @@
+use core::time;
+
 use crate::db::connection;
 use crate::db::error::DbError;
-use crate::domain::{ids::QuestionId, question::Question};
+use crate::domain::{enums::QuestionState, ids::QuestionId, question::Question};
 use crate::util::time::Timestamp;
 pub use rusqlite::Connection;
 
@@ -15,7 +17,7 @@ impl<'a> QuestionDao<'a> {
     }
 
     /// 根据领域层 `QuestionId` 查询题目，找不到返回 `Ok(None)`。
-    pub fn get_question_by_id(&self, id: QuestionId) -> Result<Option<Question>, DbError> {
+    pub fn get_by_id(&self, id: QuestionId) -> Result<Option<Question>, DbError> {
         let id_i64: i64 = i64::from(id);
         if let Some(row) = crate::db::select_question_by_id(self.conn, id_i64)? {
             let q = crate::repo::question_row_to_domain(&row)
@@ -27,24 +29,27 @@ impl<'a> QuestionDao<'a> {
     }
 
     /// 插入题目，返回新记录的自增 ID。
-    pub fn question_insert(&self, q: &Question) -> Result<i64, DbError> {
-        let row = crate::repo::question_domain_to_row(q)
-            .map_err(|e| DbError::Migration(format!("convert error: {:?}", e)))?;
-
-        let name_opt = row.name.as_deref();
-        let id = crate::db::insert_question(self.conn, name_opt, &row.state, row.created_at)?;
-        Ok(id)
+    pub fn insert(
+        &self,
+        name: Option<&str>,
+        state: QuestionState,
+        created_at: Timestamp,
+    ) -> Result<QuestionId, DbError> {
+        let timestamp_i64: i64 = created_at.into();
+        let state_str = state.as_str();
+        let id = crate::db::insert_question(self.conn, name, &state_str, timestamp_i64)?;
+        Ok(QuestionId::from(id))
     }
 
     /// 修改题目名称（只传入要改的信息）。
-    pub fn question_update_name(&self, id: QuestionId, name: Option<&str>) -> Result<(), DbError> {
+    pub fn update_name(&self, id: QuestionId, name: Option<&str>) -> Result<(), DbError> {
         let id_i64: i64 = i64::from(id);
         crate::db::update_question_name(self.conn, id_i64, name)?;
         Ok(())
     }
 
     /// 修改题目删除时间（只传入要改的信息）。
-    pub fn question_update_deleted_at(
+    pub fn update_deleted_at(
         &self,
         id: QuestionId,
         deleted_at: Option<Timestamp>,

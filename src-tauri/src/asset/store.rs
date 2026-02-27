@@ -12,7 +12,7 @@ use std::time::SystemTime;
 use uuid::Uuid;
 
 use crate::asset::error::StorageError;
-use crate::asset::fs::move_file;
+use crate::asset::fs::{copy_file, move_file};
 use crate::asset::path::{PathBuilder, StorageLayout};
 
 /// 资源元数据（纯文件系统信息，不包含业务引用）
@@ -51,7 +51,6 @@ impl AssetStore {
     /// 保存多个文件到存储中。行为：为每个源文件生成文件名，并将文件移动到存储下。
     /// 返回对应的 `AssetMeta` 列表。
     ///
-    /// 注意：方法会移动源文件（如需保留请在调用前复制）。
     pub fn save_many(&self, src_paths: &[PathBuf]) -> Result<Vec<AssetMeta>, StorageError> {
         let mut metas = Vec::with_capacity(src_paths.len());
 
@@ -73,13 +72,14 @@ impl AssetStore {
 
             // 将相对路径转换为绝对路径（基于 store root）并移动文件到目标（会创建父目录）
             let dst = self.root.join(&dst_rel);
-            move_file(src.as_path(), &dst)?;
+            // copy source files into the store (keep original files)
+            copy_file(src.as_path(), &dst)?;
 
             // 4. 获取元信息
             let md = std::fs::metadata(&dst)?;
             let size = md.len();
             let created_at = md.modified().unwrap_or(SystemTime::now());
-            
+
             // 5. 记录相对路径（相对于 root）
             let relative = dst_rel;
 

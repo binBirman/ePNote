@@ -2,18 +2,16 @@
 //! 它调用 `QuestionDao`、`MetaDao`、`AssetDao` 等数据访问对象来操作数据库，并将数据库行转换为领域模型。
 //! 同时操作asset模块，实现文件资源的物理存储和逻辑删除。
 //! 题目管理器还负责维护题目的元信息（`Meta`）和资源（`Asset`）的关联关系，确保数据的一致性。
-//! 题目管理器的设计目标是将题目的业务逻辑与数据访问层分离，使得代码更清晰、易于维护和测试。
+//!
+//! 目前为简化模型，server层直接调用了dao层的insert/update/delete方法，并没有实现复杂的业务逻辑。如果后续业务复杂度增加，可以在这里添加事务控制、数据验证、事件发布等功能，以保持领域模型和数据访问层的清晰分离。
 //!
 use crate::asset::store::AssetStore;
-use crate::dao::{
-    asset_dao::AssetDao, meta_dao::MetaDao, question_dao::QuestionDao, review_dao::ReviewDao,
-};
+use crate::dao::{asset_dao::AssetDao, meta_dao::MetaDao, question_dao::QuestionDao};
 use crate::db::connection::Connection;
-use crate::domain::enums::{AssetType, MetaKey, QuestionState, SystemMetaKey};
-use crate::domain::ids::{AssetId, MetaId, QuestionId};
+use crate::db::schema::{asset_schema::*, meta_schema::*, question_schema::*};
+use crate::domain::ids::QuestionId;
 use crate::domain::question_info::QuestionInfo;
 use crate::error::AppError;
-use crate::util::time::Timestamp;
 use std::path::PathBuf;
 
 /// 录入题目
@@ -28,7 +26,7 @@ pub fn create_question(
     answer_image_paths: Vec<String>,
     subject: Option<String>,
     knowledge_points: Vec<String>,
-) -> Result<QuestionId, AppError> {
+) -> Result<i64, AppError> {
     // 1. 将图片移动到 AssetStore 并获取相对路径列表
 
     let q_srcs: Vec<PathBuf> = question_image_paths
@@ -41,42 +39,36 @@ pub fn create_question(
     let a_metas = store.save_many(&a_srcs)?;
 
     // 2. 创建题目记录
-    let qd = QuestionDao::new(conn);
-
-    let now = crate::util::time::now_ts();
-    let qid = qd.insert(Some(&name), QuestionState::NEW, now)?;
+    let now = crate::util::time::now_ts().as_i64();
+    let qid = insert_question(conn, Some(&name), "NEW", now)?;
 
     // 3. 插入资源记录
-    let ad = AssetDao::new(conn);
     for meta in q_metas {
-        let aid = ad.insert(
-            qid.clone(),
-            AssetType::QUESTION,
-            meta.relative_path.clone(),
-            Timestamp::from(meta.created_at.clone()),
-        )?;
+        let path = meta.relative_path.to_string_lossy().into_owned();
+        let created_at = meta
+            .created_at
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
+        insert_asset(conn, qid, "QUESTION", &path, created_at)?;
     }
     for meta in a_metas {
-        let aid = ad.insert(
-            qid.clone(),
-            AssetType::ANSWER,
-            meta.relative_path.clone(),
-            Timestamp::from(meta.created_at.clone()),
-        )?;
+        let path = meta.relative_path.to_string_lossy().into_owned();
+        let created_at = meta
+            .created_at
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
+        insert_asset(conn, qid, "ANSWER", &path, created_at)?;
     }
 
     // 4. 插入元信息（科目与知识点）
-    let md = MetaDao::new(conn);
     if let Some(s) = subject {
-        let mid = md.insert(qid.clone(), MetaKey::System(SystemMetaKey::Subject), &s)?;
+        let mid = insert_meta(conn, qid.clone(), "system.Subject", &s)?;
     }
 
     for kp in knowledge_points {
-        let mid = md.insert(
-            qid.clone(),
-            MetaKey::System(SystemMetaKey::KnowledgePoint),
-            &kp,
-        )?;
+        let mid = insert_meta(conn, qid.clone(), "system.KnowledgePoint", &kp)?;
     }
 
     Ok(qid)
@@ -88,10 +80,9 @@ pub fn create_question(
 /// 输出：是否删除成功
 ///  - 成功返回 `Ok(true)`
 ///  - 失败返回 `Err(DbError)`
-pub fn delete_question(conn: &Connection, qid: QuestionId) -> Result<bool, AppError> {
-    let qd = QuestionDao::new(conn);
-    let now = crate::util::time::now_ts();
-    qd.update_deleted_at(qid, Some(now))?;
+pub fn delete_question(conn: &Connection, qid: i64) -> Result<bool, AppError> {
+    let now = crate::util::time::now_ts().as_i64();
+    update_question_deleted_at(conn, qid, Some(now))?;
     Ok(true)
 }
 
@@ -101,26 +92,20 @@ pub fn delete_question(conn: &Connection, qid: QuestionId) -> Result<bool, AppEr
 /// 输出：是否恢复成功
 ///  - 成功返回 `Ok(true)`
 /// - 失败返回 `Err(DbError)`
-pub fn restore_question(conn: &Connection, qid: QuestionId) -> Result<bool, AppError> {
-    let qd = QuestionDao::new(conn);
-    qd.update_deleted_at(qid, None)?;
+pub fn restore_question(conn: &Connection, qid: i64) -> Result<bool, AppError> {
+    update_question_deleted_at(conn, qid, None)?;
     Ok(true)
 }
 
 /// 题目改名
 /// 输入：题目ID，新题目名
 /// 输出：是否改名成功
-pub fn rename_question(
-    conn: &Connection,
-    qid: QuestionId,
-    new_name: String,
-) -> Result<bool, AppError> {
-    let qd = QuestionDao::new(conn);
-    qd.update_name(qid, Some(&new_name))?;
+pub fn rename_question(conn: &Connection, qid: i64, new_name: String) -> Result<bool, AppError> {
+    update_question_name(conn, qid, Some(&new_name))?;
     Ok(true)
 }
 
-/// 提取单个题目的所有信息（包括元信息和资源）
+/// 提取单个题目的所有信息,返回domain结构（包括元信息和资源）
 /// 输入：题目ID
 /// 输出：对应question_info结构体，或错误信息
 pub fn get_question_detail(conn: &Connection, qid: QuestionId) -> Result<QuestionInfo, AppError> {

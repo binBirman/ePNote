@@ -5,7 +5,7 @@ pub mod review_repo;
 
 pub mod error;
 
-mod primitive;
+pub mod primitive;
 
 mod tests {
     mod a_repo_test;

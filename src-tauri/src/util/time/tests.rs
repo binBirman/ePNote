@@ -1,9 +1,7 @@
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::util::time::{
-        days_since, from_timestamp, now_ts, range_of_day, to_unix_ts, LogicalDay, Timestamp,
-    };
+    use crate::util::time::{days_since, now_ts, range_of_day, to_unix_ts, LogicalDay, Timestamp};
     use chrono::{TimeZone, Utc};
 
     #[test]
@@ -14,7 +12,7 @@ mod tests {
             .with_ymd_and_hms(2026, 2, 9, 4, 0, 0)
             .unwrap();
         let ts = Timestamp(dt.timestamp());
-        let logical_day = from_timestamp(ts);
+        let logical_day = LogicalDay::from(ts);
         let (start, end) = range_of_day(logical_day);
         assert!(start.0 < ts.0 && ts.0 < end.0);
     }
