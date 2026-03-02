@@ -9,6 +9,7 @@ pub struct View {
     pub state: QuestionState,
     pub created_at: Timestamp,
     pub deleted_at: Option<Timestamp>,
-    pub subject: Option<String>,
+    pub subject: String,
+    pub knowledge_points: Vec<String>,
     pub last_reviewed_at: Timestamp,
 }

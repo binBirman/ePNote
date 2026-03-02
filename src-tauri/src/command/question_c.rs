@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use tauri::State;
 
-use crate::app::AppState;
+use crate::app::{AppInner, AppState};
 use crate::domain::QuestionId;
 use crate::server::question_manager::*;
 
@@ -14,10 +14,18 @@ pub fn create_question_comm(
     subject: Option<String>,
     knowledge_points: Vec<String>,
 ) -> Result<String, String> {
-    let conn = state.db.lock().unwrap();
+    let guard = state.inner.lock().unwrap();
+    let conn = match &*guard {
+        Some(inner) => &inner.db,
+        None => return Err("App not initialized".to_string()),
+    };
+    let store = match &*guard {
+        Some(inner) => &inner.asset_store,
+        None => return Err("App not initialized".to_string()),
+    };
     match create_question(
         &conn,
-        &state.asset,
+        &store,
         name,
         question_image_paths,
         answer_image_paths,
@@ -37,7 +45,11 @@ pub fn create_question_comm(
 
 #[tauri::command]
 pub fn delete_question_comm(state: tauri::State<AppState>, id: i64) -> Result<String, String> {
-    let conn = state.db.lock().unwrap();
+    let guard = state.inner.lock().unwrap();
+    let conn = match &*guard {
+        Some(inner) => &inner.db,
+        None => return Err("App not initialized".to_string()),
+    };
     let qid = QuestionId::from(id);
     match delete_question(&conn, qid) {
         Ok(_) => {
@@ -53,7 +65,11 @@ pub fn delete_question_comm(state: tauri::State<AppState>, id: i64) -> Result<St
 
 #[tauri::command]
 pub fn restore_question_comm(state: tauri::State<AppState>, id: i64) -> Result<String, String> {
-    let conn = state.db.lock().unwrap();
+    let guard = state.inner.lock().unwrap();
+    let conn = match &*guard {
+        Some(inner) => &inner.db,
+        None => return Err("App not initialized".to_string()),
+    };
     let qid = QuestionId::from(id);
     match restore_question(&conn, qid) {
         Ok(_) => {

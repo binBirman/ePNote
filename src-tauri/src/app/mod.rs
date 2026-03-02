@@ -1,9 +1,9 @@
 pub mod appstate;
 pub mod config;
 pub mod error;
-mod init;
-mod instance;
-mod types;
+pub mod init;
+pub mod instance;
+pub mod types;
 
 pub use appstate::*;
 pub use error::*;

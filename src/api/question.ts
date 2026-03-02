@@ -37,17 +37,20 @@ export function restoreQuestion(id: number) {
   return call<string>("restore_question_comm", { id });
 }
 
+export function getQuestionData(id: number) { console.debug('getQuestionData called with id:', id) }
+
 export function show_list_available_questions_page(page: number, pageSize: number) {
+  console.log("发送参数:", { page, page_size: pageSize })
   return call<ActiveQuestion[]>("show_list_available_questions_page", {
     page,
-    page_size: pageSize,
+    pageSize,
   });
 }
 
 export function show_list_deleted_questions_page(page: number, pageSize: number) {
   return call<DeleteQuestion[]>("show_list_deleted_questions_page", {
     page,
-    page_size: pageSize,
+    pageSize,
   });
 }
 
@@ -59,7 +62,7 @@ export function show_list_available_questions_by_state_page(
   return call<ActiveQuestion[]>("show_list_available_questions_by_state_page", {
     question_state,
     page,
-    page_size: pageSize,
+    pageSize,
   });
 }
 
@@ -71,6 +74,14 @@ export function show_list_available_questions_by_subject_page(
   return call<ActiveQuestion[]>("show_list_available_questions_by_subject_page", {
     subject,
     page,
-    page_size: pageSize,
+    pageSize,
   });
+}
+
+export function show_subjects() {
+  return call<string[]>("show_subjects");
+}
+
+export function show_states() {
+  return call<string[]>("show_states");
 }

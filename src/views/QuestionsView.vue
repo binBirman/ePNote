@@ -7,13 +7,15 @@ import {
   show_list_available_questions_page,
   show_list_available_questions_by_state_page,
   show_list_available_questions_by_subject_page,
+  show_subjects,
+  show_states,
 } from '@/api/question'
 
 const router = useRouter()
 const route = useRoute()
 
 const searchKeyword = ref('')
-const stateFilter = ref<'ALL' | 'NEW' | 'LEARNING' | 'STABLE'>('ALL')
+const stateFilter = ref<string>('ALL')
 const subjectFilter = ref<string>('ALL')
 const pageSize = 10
 const currentPage = ref(0)
@@ -29,14 +31,34 @@ interface LocalQuestion {
 }
 const displayedQuestions = ref<LocalQuestion[]>([])
 const subjects = ref<string[]>([])
+const states = ref<string[]>([])
 
 onMounted(() => {
-  loadQuestions()
+  ;(async () => {
+    try {
+      const subs = await show_subjects()
+      subjects.value = subs || []
+      try {
+        const sts = await show_states()
+        states.value = sts || []
+      } catch (e) {
+        console.error('加载状态失败', e)
+        states.value = ['NEW', 'LEARNING', 'STABLE']
+      }
+    } catch (e) {
+      console.error('加载科目失败', e)
+    }
+    loadQuestions()
+  })()
 })
 
 watch(() => route.query.r, (v) => {
   if (v) loadQuestions()
 })
+
+// reload when filters change
+watch(subjectFilter, () => loadQuestions(0))
+watch(stateFilter, () => loadQuestions(0))
 
 const mapActive = (a: ActiveQuestion): LocalQuestion => ({
   id: a.id,
@@ -60,9 +82,6 @@ const loadQuestions = async (page = 0) => {
     }
 
     displayedQuestions.value = res.map(mapActive)
-    const set = new Set<string>()
-    displayedQuestions.value.forEach(q => { if (q.subject) set.add(q.subject) })
-    subjects.value = Array.from(set)
 
     currentPage.value = page
     hasNext.value = res.length >= pageSize
@@ -180,9 +199,7 @@ const goToRecycleBin = () => {
         </select>
         <select v-model="stateFilter" class="state-filter">
           <option value="ALL">全部状态</option>
-          <option value="NEW">新题</option>
-          <option value="LEARNING">学习中</option>
-          <option value="STABLE">已掌握</option>
+          <option v-for="s in states" :key="s" :value="s">{{ s }}</option>
         </select>
       </div>
       <div class="toolbar-right">

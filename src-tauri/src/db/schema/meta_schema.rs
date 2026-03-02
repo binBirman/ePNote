@@ -126,3 +126,29 @@ pub fn select_meta_by_question_key(
 
     Ok(None)
 }
+
+pub fn select_meta_values_by_question_key(
+    conn: &Connection,
+    question_id: i64,
+    key: &str,
+) -> Result<Vec<String>, DbError> {
+    let mut stmt = conn.prepare(
+        r#"
+        SELECT value
+        FROM meta
+        WHERE question_id = ?1 AND key = ?2
+        "#,
+    )?;
+
+    let rows = stmt.query_map((question_id, key), |row| {
+        let v: String = row.get(0)?;
+        Ok(v)
+    })?;
+
+    let mut values = Vec::new();
+    for v in rows {
+        values.push(v?);
+    }
+
+    Ok(values)
+}

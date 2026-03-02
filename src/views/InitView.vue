@@ -1,44 +1,70 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { mockInit } from '../mock/data'
+import { open } from '@tauri-apps/plugin-dialog'
+import { tauri_init_note } from '../api/init'
 
 const router = useRouter()
 const mockPath = ref('')
 const loading = ref(false)
 const error = ref('')
 
+
+
 const selectDirectory = async () => {
-  // 在 Tauri 环境下尝试使用系统目录选择器
+  error.value = ''
+
   try {
-    const pkg = '@tauri-apps/api'
-    const { open } = await import((pkg as unknown as string) + '/dialog')
-    // 打开文件夹选择对话框
-    const path = await open({ directory: true })
-    if (typeof path === 'string' && path) {
+    const path = await open({
+      directory: true,
+      multiple: false,
+    })
+
+    if (typeof path === 'string') {
       mockPath.value = path
       return
     }
-    // 在某些平台 open 可能返回数组
-    if (Array.isArray(path) && path.length > 0) {
-      mockPath.value = path[0]
-      return
-    }
-  } catch (e) {
-    // 非 Tauri 环境或导入失败，退回到 mock 路径
-    mockPath.value = 'D:/错题本资源'
+
+    error.value = '未选择目录'
+  } catch (err) {
+    console.error('选择目录失败:', err)
+    error.value = '无法打开目录选择器'
   }
 }
 
+
+// 尝试设置一个默认路径（优先使用 Tauri 的 homeDir）
+onMounted(async () => {
+  try {
+    const pkg = '@tauri-apps/api'
+    const { homeDir } = await import((pkg as unknown as string) + '/path')
+    const dir = await homeDir()
+    if (dir) {
+      mockPath.value = dir
+      return
+    }
+  } catch (_err: unknown) {
+    // 无法获取 homeDir：记录以便排查但不打断流程
+    console.warn('homeDir lookup failed', _err)
+  }
+  // 浏览器或无法获取时，使用常见的 Windows 公共用户目录作为默认
+  mockPath.value = 'C:\\Users\\Public'
+})
+
 const handleInit = async () => {
   if (!mockPath.value) return
+
   loading.value = true
   error.value = ''
+
   try {
-    await mockInit(mockPath.value)
+    await tauri_init_note(mockPath.value)
     router.push('/review')
-  } catch (e: any) {
-    error.value = (e && e.message) ? e.message : '初始化失败，请检查路径或查看日志'
+  } catch (err: unknown) {
+    console.error('初始化失败:', err)
+    error.value = err instanceof Error
+      ? err.message
+      : '初始化失败'
   } finally {
     loading.value = false
   }
@@ -78,6 +104,7 @@ const handleInit = async () => {
       >
         {{ loading ? '初始化中...' : '初始化系统' }}
       </button>
+
     </div>
   </div>
 </template>

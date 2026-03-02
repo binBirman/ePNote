@@ -109,21 +109,30 @@ export function setInitialized(flag: boolean, root?: string) {
 
 // 模拟初始化
 export async function mockInit(directory: string) {
-  // 如果在 Tauri 环境下，尝试调用后端初始化
+  // 如果在 Tauri 环境下，优先调用后端初始化
+  // 我们需要区分两种失败场景：
+  // 1) 动态导入 '@tauri-apps/api' 失败 —— 说明不是 Tauri 环境，安全回退到 mock 行为；
+  // 2) 动态导入成功但 invoke 调用失败 —— 说明在 Tauri 环境但后端初始化失败，应将错误抛出，
+  //    由上层 UI（InitView）显示给用户，而不是默默回退为 mock 初始化。
   try {
-    // 动态导入以避免在非 Tauri（浏览器）环境构建时报错
-    // 使用 invoke('tauri_init_note', { root }) 调用后端命令
+    const corePkg = '@tauri-apps/api' + '/core'
+    let invoke: any
+    try {
+      ({ invoke } = await import(corePkg))
+    } catch (impErr) {
+      // 非 Tauri 环境，回退为本地 mock 初始化
+      setInitialized(true, directory)
+      return
+    }
 
-    const { invoke } = await import('@tauri-apps/api' + '/core')
+    // 在 Tauri 环境下调用后端初始化；如果 invoke 失败则抛出错误到上层
     await invoke('tauri_init_note', { root: directory })
-    selectedDirectory = directory
-    initialized = true
+    setInitialized(true, directory)
     return
-  } catch {
-    // 非 Tauri 环境或调用失败时回退到本地 mock 行为
-    selectedDirectory = directory
-    initialized = true
-    return
+  } catch (e) {
+    // 如果是在 Tauri 环境且 invoke 抛出错误，则不要回退到 mock 初始化，
+    // 把错误抛给上层以便用户能看到具体原因并重试或修复问题。
+    throw e
   }
 }
 

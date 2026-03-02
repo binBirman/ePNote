@@ -74,13 +74,12 @@ const MIGRATIONS: &[Migration] = &[
             FROM question q
             LEFT JOIN meta m
             ON m.question_id = q.id
-            AND m.key = 'sys.subject'
+            AND m.key = 'system.Subject'
             LEFT JOIN (
                 SELECT question_id, MAX(reviewed_at) AS last_reviewed_at
                 FROM review
                 GROUP BY question_id
             ) r ON r.question_id = q.id
-            WHERE q.deleted_at IS NULL;
         "#,
     },
 ];

@@ -6,29 +6,24 @@ import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
 import { setInitialized } from './mock/data'
+import { tauri_check_init_default } from './api/init'
 
-const app = createApp(App)
+const app = createApp(App);
+app.use(createPinia());
+app.use(router);
+app.mount('#app');
 
-app.use(createPinia())
-app.use(router)
-
-app.mount('#app')
-
-  // 启动后在 Tauri 环境中请求后端检查默认数据根是否已初始化
-  ; (async () => {
-    try {
-      const { invoke } = await import('@tauri-apps/api' + '/core')
-      const status = await invoke('tauri_check_init_default') as { initialized: boolean; root?: string }
-      setInitialized(status.initialized, status.root)
-      if (status.initialized) {
-        // 已初始化：跳转到 review 主页面
-        router.push('/review')
-      } else {
-        router.push('/init')
-      }
-    } catch (e) {
-      // 非 Tauri 环境或错误：保留 mock 行为（默认路由 /init）
-      // 可选择打印错误以便调试
-      console.warn('check init failed', e)
-    }
-  })()
+// 启动后在 Tauri 环境中请求后端检查默认数据根是否已初始化
+(async () => {
+  const status = await tauri_check_init_default()
+  setInitialized(status.initialized, status.root)
+  if (status.initialized) {
+    router.push('/review')
+  } else {
+    router.push('/init')
+  }
+})().catch(e => {
+  // 仅在 Tauri 环境运行；若发生错误则抛出以便尽早发现问题
+  console.error('tauri check init failed', e)
+  throw e
+})

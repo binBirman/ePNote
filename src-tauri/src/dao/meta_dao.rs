@@ -70,4 +70,15 @@ impl<'a> MetaDao<'a> {
             Ok(None)
         }
     }
+
+    /// 查询某题目指定 key 的所有元信息值。
+    pub fn get_values_by_question_key(
+        &self,
+        question_id: QuestionId,
+        key: &str,
+    ) -> Result<Vec<String>, DbError> {
+        let qid_i64: i64 = i64::from(question_id);
+        let values = crate::db::select_meta_values_by_question_key(self.conn, qid_i64, key)?;
+        Ok(values)
+    }
 }

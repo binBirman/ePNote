@@ -18,8 +18,10 @@ pub fn list_available_questions_page(
     page_size: usize,
 ) -> Result<Vec<View>, AppError> {
     let vd = ViewDao::new(conn);
-    let offset = (page - 1) * page_size;
+    let offset = page * page_size;
     let views = vd.list(offset as i64, page_size as i64)?;
+
+    println!("查询结果数量 = {}", views.len());
     Ok(views)
 }
 
@@ -30,7 +32,7 @@ pub fn list_deleted_questions_page(
     page_size: usize,
 ) -> Result<Vec<View>, AppError> {
     let vd = ViewDao::new(conn);
-    let offset = (page - 1) * page_size;
+    let offset = page * page_size;
     let views = vd.list_deleted(offset as i64, page_size as i64)?;
     Ok(views)
 }
@@ -43,7 +45,7 @@ pub fn list_questions_by_subject_page(
     page_size: usize,
 ) -> Result<Vec<View>, AppError> {
     let vd = ViewDao::new(conn);
-    let offset = (page - 1) * page_size;
+    let offset = page * page_size;
     let views = vd.list_by_subject(&subject, offset as i64, page_size as i64)?;
     Ok(views)
 }

@@ -2,7 +2,14 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { getQuestionById, moveToRecycleBin, type QuestionState } from '../mock/data'
-
+// import type { ActiveQuestion } from '@/types/question'
+// import {
+//   show_list_available_questions_page,
+//   show_list_available_questions_by_state_page,
+//   show_list_available_questions_by_subject_page,
+//   show_subjects,
+//   show_states,
+// } from '@/api/question'
 const router = useRouter()
 const route = useRoute()
 
