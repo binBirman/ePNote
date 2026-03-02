@@ -29,6 +29,13 @@ pub fn create_question(
     subject: Option<String>,
     knowledge_points: Vec<String>,
 ) -> Result<QuestionId, AppError> {
+    // Debug: Print received image paths
+    println!("[DEBUG] create_question received:");
+    println!("  question_image_paths count: {}", question_image_paths.len());
+    for (i, p) in question_image_paths.iter().enumerate() {
+        println!("    [{}]: {}", i, p);
+    }
+
     // 1. 将图片移动到 AssetStore 并获取相对路径列表
 
     let q_srcs: Vec<PathBuf> = question_image_paths
@@ -37,8 +44,12 @@ pub fn create_question(
         .collect();
     let a_srcs: Vec<PathBuf> = answer_image_paths.into_iter().map(PathBuf::from).collect();
 
+    println!("  q_srcs count: {}", q_srcs.len());
+
     let q_metas = store.save_many(&q_srcs)?;
     let a_metas = store.save_many(&a_srcs)?;
+
+    println!("  q_metas count: {}", q_metas.len());
 
     // 2. 创建题目记录
     let qd = QuestionDao::new(conn);
@@ -117,6 +128,40 @@ pub fn rename_question(
 ) -> Result<bool, AppError> {
     let qd = QuestionDao::new(conn);
     qd.update_name(qid, Some(&new_name))?;
+    Ok(true)
+}
+
+/// 为题目添加图片
+pub fn add_question_images(
+    conn: &Connection,
+    store: &AssetStore,
+    qid: QuestionId,
+    image_paths: Vec<String>,
+    asset_type: AssetType,
+) -> Result<bool, AppError> {
+    let srcs: Vec<PathBuf> = image_paths.into_iter().map(PathBuf::from).collect();
+    let metas = store.save_many(&srcs)?;
+
+    let ad = AssetDao::new(conn);
+    for meta in metas {
+        ad.insert(
+            qid.clone(),
+            asset_type.clone(),
+            meta.relative_path.clone(),
+            Timestamp::from(meta.created_at.clone()),
+        )?;
+    }
+    Ok(true)
+}
+
+/// 删除题目的图片资源（逻辑删除）
+pub fn delete_question_image(conn: &Connection, asset_id: String) -> Result<bool, AppError> {
+    let ad = AssetDao::new(conn);
+    // 将 asset_id 转换为 UUID
+    let uuid = uuid::Uuid::parse_str(&asset_id)
+        .map_err(|e| AppError::NotFound(format!("Invalid asset id: {}", e)))?;
+    let aid = AssetId(uuid);
+    ad.delete(aid)?;
     Ok(true)
 }
 

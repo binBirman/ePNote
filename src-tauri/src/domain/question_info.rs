@@ -1,10 +1,10 @@
 use crate::domain::*;
 
 pub struct QuestionInfo {
-    question: Question,
-    assets: Vec<Asset>,
-    metas: Vec<Meta>,
-    reviews: Vec<Review>,
+    pub question: Question,
+    pub assets: Vec<Asset>,
+    pub metas: Vec<Meta>,
+    pub reviews: Vec<Review>,
 }
 
 impl QuestionInfo {

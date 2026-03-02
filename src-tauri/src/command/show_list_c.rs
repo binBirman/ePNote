@@ -173,3 +173,34 @@ pub fn show_list_available_questions_by_subject_page(
     );
     Ok(result)
 }
+
+#[tauri::command]
+pub fn show_list_available_questions_by_subject_and_state_page(
+    state: tauri::State<AppState>,
+    subject: String,
+    question_state: String,
+    page: usize,
+    page_size: usize,
+) -> Result<Vec<ActiveQuestion>, String> {
+    let guard = state.inner.lock().unwrap();
+    let conn = match &*guard {
+        Some(inner) => &inner.db,
+        None => return Err("App not initialized\n".to_string()),
+    };
+    let views = list_questions_by_subject_and_state_page(
+        &conn,
+        subject.clone(),
+        question_state.clone(),
+        page,
+        page_size,
+    )
+    .unwrap_or_default();
+    let result = ActiveQuestion::new(views);
+    print!(
+        "查询到的科目为 {:?} 状态为 {:?} 的题目数量 = {}\n",
+        subject,
+        question_state,
+        result.len()
+    );
+    Ok(result)
+}

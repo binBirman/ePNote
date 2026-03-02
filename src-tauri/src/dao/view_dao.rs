@@ -3,7 +3,7 @@ use crate::db::connection;
 use crate::db::error::DbError;
 use crate::db::schema::view_schema::{
     select_deleted_views_page, select_view_by_id, select_views_by_name, select_views_page,
-    select_views_page_by_state, select_views_page_by_subject,
+    select_views_page_by_state, select_views_page_by_subject, select_views_page_by_subject_and_state,
 };
 use crate::domain::enums::QuestionState;
 use crate::domain::ids::QuestionId;
@@ -195,5 +195,36 @@ impl<'a> ViewDao<'a> {
         } else {
             Ok(views)
         }
+    }
+
+    /// 分页提取某科目和某状态的所有题目视图列表（不包含已删除题目）
+    pub fn list_by_subject_and_state(
+        &self,
+        subject: &str,
+        state: &str,
+        offset: i64,
+        limit: i64,
+    ) -> Result<Vec<View>, DbError> {
+        let rows = select_views_page_by_subject_and_state(self.conn, offset, limit, subject, state)?;
+        let md = MetaDao::new(self.conn);
+        let mut views = Vec::new();
+        for row in rows {
+            let st = QuestionState::try_from(row.state.clone())
+                .map_err(|e| DbError::Migration(format!("convert error: {:?}", e)))?;
+            let knowledge_points =
+                md.get_values_by_question_key(QuestionId::from(row.id), "system.KnowledgePoint")?;
+            views.push(View {
+                id: QuestionId::from(row.id),
+                name: row.name.clone(),
+                state: st,
+                created_at: Timestamp::from(row.created_at),
+                deleted_at: row.deleted_at.map(Timestamp::from),
+                subject: row.subject.clone().unwrap_or_default(),
+                knowledge_points,
+                last_reviewed_at: Timestamp::from(row.last_reviewed_at.unwrap_or(0)),
+            });
+        }
+        println!("查询到View数据{}条", views.len());
+        Ok(views)
     }
 }

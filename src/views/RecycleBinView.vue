@@ -1,26 +1,52 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { recycleBin, getSubjects, filterRecycleBinBySubject, restoreFromRecycleBin, permanentDelete, type QuestionState, type Question } from '../mock/data'
+import {
+  show_list_deleted_questions_page,
+  restoreQuestion,
+  deleteQuestion,
+} from '@/api/question'
+import type { DeleteQuestion } from '@/types/question'
+import type { QuestionState } from '@/types/question'
 
 const router = useRouter()
 
 const subjects = ref<string[]>([])
 const subjectFilter = ref<string>('ALL')
-const displayedQuestions = ref<Question[]>([])
+const displayedQuestions = ref<DeleteQuestion[]>([])
 const selectedIds = ref<number[]>([])
+const isLoading = ref(true)
+const error = ref<string | null>(null)
 
-onMounted(() => {
-  subjects.value = ['全部', ...getSubjects()]
-  loadRecycleBin()
+onMounted(async () => {
+  await loadRecycleBin()
 })
 
-const loadRecycleBin = () => {
-  displayedQuestions.value = filterRecycleBinBySubject(subjectFilter.value)
+const loadRecycleBin = async () => {
+  isLoading.value = true
+  error.value = null
+  try {
+    console.log('Loading recycle bin...')
+    const questions = await show_list_deleted_questions_page(0, 100)
+    console.log('Deleted questions loaded:', questions)
+    displayedQuestions.value = questions
+
+    // Extract unique subjects
+    const uniqueSubjects = Array.from(new Set(questions.map(q => q.subject)))
+    subjects.value = ['全部', ...uniqueSubjects]
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : '加载回收站失败'
+    console.error('Failed to load recycle bin:', e)
+  } finally {
+    isLoading.value = false
+  }
 }
 
 const filteredQuestions = computed(() => {
-  return displayedQuestions.value
+  if (subjectFilter.value === 'ALL') {
+    return displayedQuestions.value
+  }
+  return displayedQuestions.value.filter(q => q.subject === subjectFilter.value)
 })
 
 const getStateColor = (state: QuestionState) => {
@@ -31,6 +57,10 @@ const getStateColor = (state: QuestionState) => {
       return '#FF9800'
     case 'STABLE':
       return '#4CAF50'
+    case 'DUE':
+      return '#9C27B0'
+    case 'SUSPENDED':
+      return '#607D8B'
     default:
       return '#999'
   }
@@ -44,6 +74,10 @@ const getStateLabel = (state: QuestionState) => {
       return '学习中'
     case 'STABLE':
       return '已掌握'
+    case 'DUE':
+      return '待复习'
+    case 'SUSPENDED':
+      return '暂停'
     default:
       return '未知'
   }
@@ -66,7 +100,7 @@ const toggleSelectAll = () => {
   }
 }
 
-const handleRestore = (id?: number) => {
+const handleRestore = async (id?: number) => {
   const idsToRestore = id ? [id] : selectedIds.value
   if (idsToRestore.length === 0) {
     alert('请选择要恢复的题目')
@@ -77,13 +111,20 @@ const handleRestore = (id?: number) => {
     return
   }
 
-  idsToRestore.forEach(id => restoreFromRecycleBin(id))
-  selectedIds.value = []
-  loadRecycleBin()
-  alert('恢复成功！')
+  try {
+    for (const id of idsToRestore) {
+      await restoreQuestion(id)
+    }
+    selectedIds.value = []
+    await loadRecycleBin()
+    alert('恢复成功！')
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : '恢复失败'
+    console.error('Failed to restore question:', e)
+  }
 }
 
-const handlePermanentDelete = (id?: number) => {
+const handlePermanentDelete = async (id?: number) => {
   const idsToDelete = id ? [id] : selectedIds.value
   if (idsToDelete.length === 0) {
     alert('请选择要删除的题目')
@@ -94,10 +135,17 @@ const handlePermanentDelete = (id?: number) => {
     return
   }
 
-  idsToDelete.forEach(id => permanentDelete(id))
-  selectedIds.value = []
-  loadRecycleBin()
-  alert('删除成功！')
+  try {
+    for (const id of idsToDelete) {
+      await deleteQuestion(id)
+    }
+    selectedIds.value = []
+    await loadRecycleBin()
+    alert('删除成功！')
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : '删除失败'
+    console.error('Failed to delete question:', e)
+  }
 }
 
 const isAllSelected = computed(() => {
@@ -126,90 +174,105 @@ const goBack = () => {
       </button>
     </div>
 
-    <!-- 工具栏 -->
-    <div class="toolbar">
-      <div class="toolbar-left">
-        <select v-model="subjectFilter" class="subject-filter" @change="loadRecycleBin">
-          <option value="ALL">全部科目</option>
-          <option v-for="subject in subjects.slice(1)" :key="subject" :value="subject">
-            {{ subject }}
-          </option>
-        </select>
-      </div>
-      <div class="toolbar-right">
-        <button class="action-btn restore" @click="handleRestore()" :disabled="!hasSelected">
-          恢复选中
-        </button>
-        <button class="action-btn delete" @click="handlePermanentDelete()" :disabled="!hasSelected">
-          永久删除
-        </button>
-      </div>
+    <!-- 加载状态 -->
+    <div v-if="isLoading" class="loading">
+      加载中...
     </div>
 
-    <!-- 题目列表 -->
-    <div v-if="filteredQuestions.length > 0" class="questions-list">
-      <div class="select-all-row">
-        <input
-          type="checkbox"
-          :checked="isAllSelected"
-          @change="toggleSelectAll"
-          class="select-checkbox"
-        />
-        <label class="select-label">全选</label>
+    <!-- 错误状态 -->
+    <div v-else-if="error" class="error">
+      {{ error }}
+    </div>
+
+    <!-- 正常状态 -->
+    <template v-else>
+      <!-- 工具栏 -->
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <select v-model="subjectFilter" class="subject-filter">
+            <option value="ALL">全部科目</option>
+            <option v-for="subject in subjects.slice(1)" :key="subject" :value="subject">
+              {{ subject }}
+            </option>
+          </select>
+        </div>
+        <div class="toolbar-right">
+          <button class="action-btn restore" @click="handleRestore()" :disabled="!hasSelected">
+            恢复选中
+          </button>
+          <button class="action-btn delete" @click="handlePermanentDelete()" :disabled="!hasSelected">
+            永久删除
+          </button>
+        </div>
       </div>
 
-      <div
-        v-for="question in filteredQuestions"
-        :key="question.id"
-        class="question-item"
-      >
-        <div class="question-checkbox">
+      <!-- 题目列表 -->
+      <div v-if="filteredQuestions.length > 0" class="questions-list">
+        <div class="select-all-row">
           <input
             type="checkbox"
-            :checked="selectedIds.includes(question.id)"
-            @change="toggleSelect(question.id)"
+            :checked="isAllSelected"
+            @change="toggleSelectAll"
             class="select-checkbox"
           />
+          <label class="select-label">全选</label>
         </div>
 
-        <div class="question-content" @click="goToDetail(question.id)">
-          <div class="question-header">
-            <h3 class="question-title">{{ question.name }}</h3>
-            <span class="state-badge" :style="{ backgroundColor: getStateColor(question.state) }">
-              {{ getStateLabel(question.state) }}
-            </span>
+        <div
+          v-for="question in filteredQuestions"
+          :key="question.id"
+          class="question-item"
+        >
+          <div class="question-checkbox">
+            <input
+              type="checkbox"
+              :checked="selectedIds.includes(question.id)"
+              @change="toggleSelect(question.id)"
+              class="select-checkbox"
+            />
           </div>
-          <div class="question-meta">
-            <span class="meta-item">#{{ question.id }}</span>
-            <span class="meta-item">{{ question.subject }}</span>
-            <span class="meta-item">{{ question.knowledgePoint }}</span>
-            <span class="meta-item">删除日期：{{ question.deletedDate }}</span>
-          </div>
-        </div>
 
-        <div class="question-actions">
-          <button class="icon-btn restore" @click.stop="handleRestore(question.id)" title="恢复">
-            ↺
-          </button>
-          <button class="icon-btn delete" @click.stop="handlePermanentDelete(question.id)" title="永久删除">
-            ✕
-          </button>
+          <div class="question-content" @click="goToDetail(question.id)">
+            <div class="question-header">
+              <h3 class="question-title">{{ question.title }}</h3>
+              <span class="state-badge" :style="{ backgroundColor: getStateColor(question.status as QuestionState) }">
+                {{ getStateLabel(question.status as QuestionState) }}
+              </span>
+            </div>
+            <div class="question-meta">
+              <span class="meta-item">#{{ question.id }}</span>
+              <span class="meta-item">{{ question.subject }}</span>
+              <span class="meta-item">{{ question.knowledge_points.join(', ') }}</span>
+              <span class="meta-item">删除日期：{{ question.deleted_at }}</span>
+            </div>
+          </div>
+
+          <div class="question-actions">
+            <button class="icon-btn restore" @click.stop="handleRestore(question.id)" title="恢复">
+              ↺
+            </button>
+            <button class="icon-btn delete" @click.stop="handlePermanentDelete(question.id)" title="永久删除">
+              ✕
+            </button>
+          </div>
         </div>
       </div>
-    </div>
 
-    <!-- 空状态 -->
-    <div v-else class="empty-state">
-      <div class="empty-icon">🗑️</div>
-      <p class="empty-text">回收站为空</p>
-      <button class="empty-action" @click="goBack">返回题目列表</button>
-    </div>
+      <!-- 空状态 -->
+      <div v-else class="empty-state">
+        <div class="empty-icon">🗑️</div>
+        <p class="empty-text">回收站为空</p>
+        <button class="empty-action" @click="goBack">返回题目列表</button>
+      </div>
+    </template>
   </div>
 </template>
 
 <style scoped>
 .recycle-bin-container {
-  max-width: 900px;
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
 }
 
 .header-section {
@@ -463,5 +526,19 @@ const goBack = () => {
 
 .empty-action:hover {
   background-color: #45a049;
+}
+
+.loading {
+  text-align: center;
+  padding: 60px 20px;
+  color: #666;
+  font-size: 16px;
+}
+
+.error {
+  text-align: center;
+  padding: 60px 20px;
+  color: #f44336;
+  font-size: 16px;
 }
 </style>

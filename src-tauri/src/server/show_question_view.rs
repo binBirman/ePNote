@@ -63,6 +63,20 @@ pub fn list_questions_by_state_page(
     Ok(views)
 }
 
+/// 按科目和状态筛选题目
+pub fn list_questions_by_subject_and_state_page(
+    conn: &Connection,
+    subject: String,
+    question_state: String,
+    page: usize,
+    page_size: usize,
+) -> Result<Vec<View>, AppError> {
+    let vd = ViewDao::new(conn);
+    let offset = page * page_size;
+    let views = vd.list_by_subject_and_state(&subject, &question_state, offset as i64, page_size as i64)?;
+    Ok(views)
+}
+
 /// 显示按id查找题目的结果
 pub fn find_question_by_id(conn: &Connection, id: QuestionId) -> Result<View, AppError> {
     let vd = ViewDao::new(conn);

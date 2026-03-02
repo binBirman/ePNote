@@ -36,6 +36,7 @@ sqlx = { version = "0.8.6", features = [
     "migrate",
 ] }
 tempfile = "3"
+base64 = "0.22"
 
 [dev-dependencies]
 tempfile = "3"

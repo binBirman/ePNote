@@ -289,3 +289,39 @@ pub fn select_deleted_views_page(
 
     iter.collect::<Result<Vec<_>, _>>().map_err(Into::into)
 }
+
+pub fn select_views_page_by_subject_and_state(
+    conn: &Connection,
+    offset: i64,
+    limit: i64,
+    subject: &str,
+    state: &str,
+) -> Result<Vec<ViewRow>, DbError> {
+    println!(
+        "调用 select_views_page_by_subject_and_state，offset={}, limit={}, subject={}, state={}",
+        offset, limit, subject, state
+    );
+    let mut stmt = conn.prepare(
+        r#"
+        SELECT id, name, state, created_at, deleted_at, subject, last_reviewed_at
+        FROM show_view
+        WHERE deleted_at IS NULL AND subject = ?3 AND state = ?4
+        ORDER BY created_at DESC
+        LIMIT ?1 OFFSET ?2
+        "#,
+    )?;
+
+    let iter = stmt.query_map((limit, offset, subject, state), |row| {
+        Ok(ViewRow {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            state: row.get(2)?,
+            created_at: row.get(3)?,
+            deleted_at: row.get(4)?,
+            subject: row.get(5)?,
+            last_reviewed_at: row.get(6)?,
+        })
+    })?;
+
+    iter.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+}

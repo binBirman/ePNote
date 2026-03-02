@@ -48,11 +48,17 @@ fn main() {
             show_list_c::show_list_deleted_questions_page,
             show_list_c::show_list_available_questions_by_state_page,
             show_list_c::show_list_available_questions_by_subject_page,
+            show_list_c::show_list_available_questions_by_subject_and_state_page,
             show_list_c::show_subjects,
             show_list_c::show_states,
             question_c::create_question_comm,
             question_c::delete_question_comm,
             question_c::restore_question_comm,
+            question_c::update_question_comm,
+            question_c::get_question_detail_comm,
+            question_c::get_image_base64,
+            question_c::add_question_images_comm,
+            question_c::delete_question_image_comm,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

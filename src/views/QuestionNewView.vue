@@ -9,8 +9,8 @@ const router = useRouter()
 const questionName = ref('')
 const questionSubject = ref('')
 const questionKnowledgePoint = ref('')
-const questionQuestionImage = ref('')
-const questionAnswerImage = ref('')
+const questionQuestionImages = ref<string[]>([])
+const questionAnswerImages = ref<string[]>([])
 const loading = ref(false)
 
 const handleSubmit = async () => {
@@ -29,18 +29,20 @@ const handleSubmit = async () => {
     return
   }
 
-  if (!questionQuestionImage.value.trim()) {
-    alert('请选择题目图片')
+  if (questionQuestionImages.value.length === 0) {
+    alert('请至少选择一张题目图片')
     return
   }
 
-  if (!questionAnswerImage.value.trim()) {
-    alert('请选择答案图片')
+  if (questionAnswerImages.value.length === 0) {
+    alert('请至少选择一张答案图片')
     return
   }
 
   try {
     console.log('handleSubmit start')
+    console.log('question_image_paths:', questionQuestionImages.value)
+    console.log('answer_image_paths:', questionAnswerImages.value)
     loading.value = true
     await createQuestion({
       name: questionName.value,
@@ -48,16 +50,16 @@ const handleSubmit = async () => {
       knowledge_points: questionKnowledgePoint.value
         ? questionKnowledgePoint.value.split(',').map(s => s.trim()).filter(Boolean)
         : [],
-      question_image_paths: questionQuestionImage.value ? [questionQuestionImage.value] : [],
-      answer_image_paths: questionAnswerImage.value ? [questionAnswerImage.value] : [],
+      question_image_paths: questionQuestionImages.value,
+      answer_image_paths: questionAnswerImages.value,
     })
 
     // 清空表单
   questionName.value = ''
   questionSubject.value = ''
   questionKnowledgePoint.value = ''
-  questionQuestionImage.value = ''
-  questionAnswerImage.value = ''
+  questionQuestionImages.value = []
+  questionAnswerImages.value = []
 
     alert('题目创建成功！')
     router.push({ path: '/questions', query: { r: String(Date.now()) } })
@@ -75,7 +77,7 @@ const handleSubmit = async () => {
 
 const handleCancel = () => {
   if (questionName.value || questionSubject.value || questionKnowledgePoint.value ||
-      questionQuestionImage.value || questionAnswerImage.value) {
+      questionQuestionImages.value.length > 0 || questionAnswerImages.value.length > 0) {
     if (!confirm('确定要放弃当前编辑吗？')) {
       return
     }
@@ -83,60 +85,49 @@ const handleCancel = () => {
   router.push('/questions')
 }
 
-const createFileInputFallback = (accept = 'image/*') => {
-  return new Promise<File | null>((resolve) => {
-    const input = document.createElement('input')
-    input.type = 'file'
-    input.accept = accept
-    input.style.display = 'none'
-    document.body.appendChild(input)
-    input.onchange = () => {
-      const file = input.files && input.files[0]
-      // cleanup
-      setTimeout(() => document.body.removeChild(input), 0)
-      resolve(file || null)
-    }
-    input.click()
-  })
-}
-
-const selectQuestionImage = async () => {
+// 使用 Tauri dialog 选择多个图片（逐个选择，可以多次添加）
+const selectQuestionImages = async () => {
   try {
-    // try Tauri dialog first
-    const res = await open({ multiple: false, filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'] }] })
+    const res = await open({
+      multiple: true,
+      filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'] }]
+    })
     if (res) {
-      const path = Array.isArray(res) ? res[0] : res
-      questionQuestionImage.value = path as string
-      return
+      // Tauri dialog 返回字符串数组或单个字符串
+      const paths = Array.isArray(res) ? res : [res]
+      console.log('[DEBUG] Selected question images:', paths)
+      // 追加到现有图片列表
+      questionQuestionImages.value = [...questionQuestionImages.value, ...paths.map(p => p as string)]
     }
   } catch (e) {
-    // fall through to browser fallback
-    console.debug('tauri open failed, falling back to input file', e)
+    console.error('Failed to select images:', e)
+    alert('选择图片失败: ' + e)
   }
-
-  // browser fallback: create input and show preview via object URL
-  const file = await createFileInputFallback('image/*')
-  if (!file) return
-  const url = URL.createObjectURL(file)
-  questionQuestionImage.value = url
 }
 
-const selectAnswerImage = async () => {
+const selectAnswerImages = async () => {
   try {
-    const res = await open({ multiple: false, filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'] }] })
+    const res = await open({
+      multiple: true,
+      filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'] }]
+    })
     if (res) {
-      const path = Array.isArray(res) ? res[0] : res
-      questionAnswerImage.value = path as string
-      return
+      const paths = Array.isArray(res) ? res : [res]
+      console.log('[DEBUG] Selected answer images:', paths)
+      questionAnswerImages.value = [...questionAnswerImages.value, ...paths.map(p => p as string)]
     }
   } catch (e) {
-    console.debug('tauri open failed, falling back to input file', e)
+    console.error('Failed to select images:', e)
+    alert('选择图片失败: ' + e)
   }
+}
 
-  const file = await createFileInputFallback('image/*')
-  if (!file) return
-  const url = URL.createObjectURL(file)
-  questionAnswerImage.value = url
+const removeQuestionImage = (index: number) => {
+  questionQuestionImages.value.splice(index, 1)
+}
+
+const removeAnswerImage = (index: number) => {
+  questionAnswerImages.value.splice(index, 1)
 }
 </script>
 
@@ -193,30 +184,36 @@ const selectAnswerImage = async () => {
 
         <!-- 题目图 -->
         <div class="form-group">
-          <label class="form-label">题目图 *</label>
+          <label class="form-label">题目图 * (可多选)</label>
           <div class="image-upload-area">
-            <div v-if="!questionQuestionImage" class="upload-placeholder" @click="selectQuestionImage">
+            <div v-if="questionQuestionImages.length === 0" class="upload-placeholder" @click="selectQuestionImages">
               <span class="upload-icon">📷</span>
               <span class="upload-text">点击选择题目图片</span>
             </div>
-            <div v-else class="upload-preview">
-              <span class="preview-text">{{ questionQuestionImage }}</span>
-              <button type="button" class="remove-btn" @click="questionQuestionImage = ''">删除</button>
+            <div v-else class="upload-preview-list">
+              <div v-for="(img, index) in questionQuestionImages" :key="'q'+index" class="upload-preview-item">
+                <span class="preview-text">{{ img }}</span>
+                <button type="button" class="remove-btn" @click.stop="removeQuestionImage(index)">删除</button>
+              </div>
+              <button type="button" class="add-more-btn" @click.stop="selectQuestionImages">+ 添加更多</button>
             </div>
           </div>
         </div>
 
         <!-- 答案图 -->
         <div class="form-group">
-          <label class="form-label">答案图 *</label>
+          <label class="form-label">答案图 * (可多选)</label>
           <div class="image-upload-area">
-            <div v-if="!questionAnswerImage" class="upload-placeholder" @click="selectAnswerImage">
+            <div v-if="questionAnswerImages.length === 0" class="upload-placeholder" @click="selectAnswerImages">
               <span class="upload-icon">📷</span>
               <span class="upload-text">点击选择答案图片</span>
             </div>
-            <div v-else class="upload-preview">
-              <span class="preview-text">{{ questionAnswerImage }}</span>
-              <button type="button" class="remove-btn" @click="questionAnswerImage = ''">删除</button>
+            <div v-else class="upload-preview-list">
+              <div v-for="(img, index) in questionAnswerImages" :key="'a'+index" class="upload-preview-item">
+                <span class="preview-text">{{ img }}</span>
+                <button type="button" class="remove-btn" @click.stop="removeAnswerImage(index)">删除</button>
+              </div>
+              <button type="button" class="add-more-btn" @click.stop="selectAnswerImages">+ 添加更多</button>
             </div>
           </div>
         </div>
@@ -237,7 +234,9 @@ const selectAnswerImage = async () => {
 
 <style scoped>
 .new-container {
-  max-width: 700px;
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
 }
 
 .back-section {
@@ -361,6 +360,45 @@ const selectAnswerImage = async () => {
   font-size: 14px;
   text-align: center;
   word-break: break-all;
+}
+
+.upload-preview-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.upload-preview-item {
+  background-color: #fff;
+  border: 2px solid #4CAF50;
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.upload-preview-item .preview-text {
+  flex: 1;
+  text-align: left;
+}
+
+.add-more-btn {
+  padding: 8px 16px;
+  background-color: #f0f0f0;
+  border: 2px dashed #ccc;
+  border-radius: 8px;
+  color: #666;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.add-more-btn:hover {
+  border-color: #4CAF50;
+  color: #4CAF50;
+  background-color: #f8f8f8;
 }
 
 .remove-btn {

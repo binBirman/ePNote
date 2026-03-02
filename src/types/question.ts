@@ -13,6 +13,7 @@ export interface ActiveQuestion {
   subject: string;
   title: string;
   status: string;
+  knowledge_points: string[];
   created_at: string;
   last_review: string;
 }
@@ -22,8 +23,29 @@ export interface DeleteQuestion {
   subject: string;
   title: string;
   status: string;
+  knowledge_points: string[];
   deleted_at: string;
 }
+
+export interface QuestionImage {
+  path: string;
+  asset_id?: string;
+}
+
+export interface QuestionInfo {
+  id: number;
+  name: string | null;
+  state: string;
+  created_at: string;
+  deleted_at: string | null;
+  subject: string | null;
+  knowledge_points: string[];
+  question_images: QuestionImage[];
+  answer_images: QuestionImage[];
+  last_reviewed_at: string | null;
+}
+
+export type QuestionState = 'NEW' | 'LEARNING' | 'STABLE' | 'DUE' | 'SUSPENDED';
 
 // export enum QuestionState {
 //   NEW,

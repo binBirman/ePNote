@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run tauri build -- --no-bundle)",
+      "Bash(cargo check:*)",
+      "Bash(npm run tauri dev)"
+    ]
+  }
+}

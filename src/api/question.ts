@@ -1,6 +1,6 @@
 // src/api/question.ts
 import { call } from "./core";
-import type { CreateQuestion } from "@/types/question";
+import type { CreateQuestion, QuestionInfo } from "@/types/question";
 import type { ActiveQuestion, DeleteQuestion } from "@/types/question";
 
 export function createQuestion(context: CreateQuestion) {
@@ -12,21 +12,18 @@ export function createQuestion(context: CreateQuestion) {
     subject: context.subject,
     knowledge_points: context.knowledge_points,
   }
-  console.debug('createQuestion payload:', payload)
-  // include both snake_case and camelCase keys because Tauri's generated
-  // bindings may expect camelCase parameter names (e.g. questionImagePaths)
-  const combined = {
-    // snake_case
-    ...payload,
-    // camelCase variants
-    questionImagePaths: payload.question_image_paths,
-    answerImagePaths: payload.answer_image_paths,
-    knowledgePoints: payload.knowledge_points,
+  console.log('[DEBUG] createQuestion payload:', payload)
+  // Tauri expects camelCase parameter names
+  const args = {
+    name: context.name,
+    questionImagePaths: context.question_image_paths,
+    answerImagePaths: context.answer_image_paths,
+    subject: context.subject,
+    knowledgePoints: context.knowledge_points,
   }
-  // strip any reactive/prototype fields by serializing
-  const plain = JSON.parse(JSON.stringify(combined))
-  console.debug('createQuestion plain payload:', plain)
-  return call<string>("create_question_comm", plain);
+  console.log('[DEBUG] createQuestion args (questionImagePaths):', args.questionImagePaths)
+  console.log('[DEBUG] createQuestion args (answerImagePaths):', args.answerImagePaths)
+  return call<string>("create_question_comm", args);
 }
 
 export function deleteQuestion(id: number) {
@@ -37,7 +34,9 @@ export function restoreQuestion(id: number) {
   return call<string>("restore_question_comm", { id });
 }
 
-export function getQuestionData(id: number) { console.debug('getQuestionData called with id:', id) }
+export function getQuestionData(id: number) {
+  return call<QuestionInfo>("get_question_detail_comm", { id });
+}
 
 export function show_list_available_questions_page(page: number, pageSize: number) {
   console.log("发送参数:", { page, page_size: pageSize })
@@ -78,10 +77,57 @@ export function show_list_available_questions_by_subject_page(
   });
 }
 
+export function show_list_available_questions_by_subject_and_state_page(
+  subject: string,
+  questionState: string,
+  page: number,
+  pageSize: number
+) {
+  return call<ActiveQuestion[]>("show_list_available_questions_by_subject_and_state_page", {
+    subject,
+    questionState,
+    page,
+    pageSize,
+  });
+}
+
 export function show_subjects() {
   return call<string[]>("show_subjects");
 }
 
 export function show_states() {
   return call<string[]>("show_states");
+}
+
+export interface UpdateQuestionInput {
+  name?: string;
+  subject?: string;
+  knowledge_points?: string[];
+}
+
+export function updateQuestion(id: number, data: UpdateQuestionInput) {
+  return call<string>("update_question_comm", {
+    id,
+    data: {
+      name: data.name,
+      subject: data.subject,
+      knowledge_points: data.knowledge_points,
+    }
+  });
+}
+
+export function getImageBase64(path: string) {
+  return call<string>("get_image_base64", { path });
+}
+
+export function addQuestionImages(id: number, imagePaths: string[], imageType: string) {
+  return call<string>("add_question_images_comm", {
+    id,
+    imagePaths,
+    imageType,
+  });
+}
+
+export function deleteQuestionImage(assetId: string) {
+  return call<string>("delete_question_image_comm", { assetId });
 }

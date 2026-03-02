@@ -7,6 +7,7 @@ import {
   show_list_available_questions_page,
   show_list_available_questions_by_state_page,
   show_list_available_questions_by_subject_page,
+  show_list_available_questions_by_subject_and_state_page,
   show_subjects,
   show_states,
 } from '@/api/question'
@@ -73,7 +74,15 @@ const mapActive = (a: ActiveQuestion): LocalQuestion => ({
 const loadQuestions = async (page = 0) => {
   try {
     let res: ActiveQuestion[] = []
-    if (subjectFilter.value !== 'ALL') {
+    if (subjectFilter.value !== 'ALL' && stateFilter.value !== 'ALL') {
+      // 同时按科目和状态筛选
+      res = await show_list_available_questions_by_subject_and_state_page(
+        subjectFilter.value,
+        stateFilter.value,
+        page,
+        pageSize
+      )
+    } else if (subjectFilter.value !== 'ALL') {
       res = await show_list_available_questions_by_subject_page(subjectFilter.value, page, pageSize)
     } else if (stateFilter.value !== 'ALL') {
       res = await show_list_available_questions_by_state_page(stateFilter.value, page, pageSize)
@@ -260,7 +269,9 @@ const goToRecycleBin = () => {
 
 <style scoped>
 .questions-container {
-  max-width: 800px;
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
 }
 
 .page-title {
