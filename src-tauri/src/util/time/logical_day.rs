@@ -15,10 +15,15 @@ fn default_offset() -> FixedOffset {
 
 impl LogicalDay {
     pub fn to_string(&self) -> String {
-        let offset = default_offset();
-        let dt = offset
-            .timestamp_opt((self.0 as i64) * 24 * 3600, 0)
-            .unwrap()
+        // num_days_from_ce() 返回公元以来的天数（从公元1年1月1日开始）
+        // 需要用 chrono 的 from_num_days_from_ce_opt 转换回日期
+        let naive_date = chrono::NaiveDate::from_num_days_from_ce_opt(self.0)
+            .expect("Invalid logical day");
+        // 直接用日期构造日期时间，然后应用时区偏移
+        let dt = naive_date.and_hms_opt(0, 0, 0)
+            .map(|ndt| default_offset().from_local_datetime(&ndt).single())
+            .flatten()
+            .expect("Invalid local datetime")
             + chrono::Duration::hours(DAY_CUTOFF_HOUR);
         dt.format("%Y-%m-%d").to_string()
     }

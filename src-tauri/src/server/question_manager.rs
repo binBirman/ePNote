@@ -131,6 +131,38 @@ pub fn rename_question(
     Ok(true)
 }
 
+/// 更新题目的科目和知识点
+/// 输入：题目ID，新科目（可选），新知识点列表（可选）
+/// 输出：是否更新成功
+pub fn update_question_meta(
+    conn: &Connection,
+    qid: QuestionId,
+    new_subject: Option<String>,
+    new_knowledge_points: Option<Vec<String>>,
+) -> Result<bool, AppError> {
+    let md = MetaDao::new(conn);
+
+    // 更新科目
+    if let Some(subject) = new_subject {
+        // 删除旧的科目
+        md.delete_by_question_and_key(qid.clone(), MetaKey::System(SystemMetaKey::Subject))?;
+        // 添加新的科目
+        md.insert(qid.clone(), MetaKey::System(SystemMetaKey::Subject), &subject)?;
+    }
+
+    // 更新知识点
+    if let Some(kps) = new_knowledge_points {
+        // 删除旧的知识点
+        md.delete_by_question_and_key(qid.clone(), MetaKey::System(SystemMetaKey::KnowledgePoint))?;
+        // 添加新的知识点
+        for kp in kps {
+            md.insert(qid.clone(), MetaKey::System(SystemMetaKey::KnowledgePoint), &kp)?;
+        }
+    }
+
+    Ok(true)
+}
+
 /// 为题目添加图片
 pub fn add_question_images(
     conn: &Connection,

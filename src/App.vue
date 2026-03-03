@@ -50,11 +50,14 @@ body {
   overflow-y: auto;
   overflow-x: hidden;
   padding: 30px 40px;
-  margin-left: 200px;
+  /* 无侧边栏时不需要左边距 */
+  padding-left: 0;
+  margin-left: 0;
 }
 
+/* 有侧边栏时，内容区需要为侧边栏留出空间 */
 .main-content.with-sidebar {
-  margin-left: 0;
+  padding-left: 220px; /* 侧边栏宽度200px + 20px间距 */
 }
 
 button {

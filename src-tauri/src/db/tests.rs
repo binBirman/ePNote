@@ -209,3 +209,90 @@ fn test_select_meta_by_question() {
     assert_eq!(metas.len(), 2);
     assert!(metas.iter().any(|m| m.key == "key0"));
 }
+
+#[test]
+fn test_delete_metas_by_question_and_key() {
+    let conn = setup_test_db();
+    let now = Utc::now().timestamp();
+    let qid = insert_question(&conn, Some("题目G"), "active", now).unwrap();
+
+    // 插入多个知识点
+    let kp_key = "system.KnowledgePoint";
+    insert_meta(&conn, qid, kp_key, "知识点1").unwrap();
+    insert_meta(&conn, qid, kp_key, "知识点2").unwrap();
+    insert_meta(&conn, qid, kp_key, "知识点3").unwrap();
+
+    // 插入一个科目
+    let subject_key = "system.Subject";
+    insert_meta(&conn, qid, subject_key, "数学").unwrap();
+
+    // 验证知识点已插入
+    let metas_before = select_meta_by_question(&conn, qid).unwrap();
+    assert_eq!(metas_before.len(), 4);
+
+    // 删除所有知识点
+    delete_metas_by_question_and_key(&conn, qid, kp_key).unwrap();
+
+    // 验证只剩科目
+    let metas_after = select_meta_by_question(&conn, qid).unwrap();
+    assert_eq!(metas_after.len(), 1);
+    assert_eq!(metas_after[0].key, subject_key);
+    assert_eq!(metas_after[0].value, "数学");
+}
+
+#[test]
+fn test_update_knowledge_points_workflow() {
+    let conn = setup_test_db();
+    let now = Utc::now().timestamp();
+    let qid = insert_question(&conn, Some("题目H"), "active", now).unwrap();
+
+    let kp_key = "system.KnowledgePoint";
+
+    // 初始插入知识点
+    insert_meta(&conn, qid, kp_key, "初始知识点1").unwrap();
+    insert_meta(&conn, qid, kp_key, "初始知识点2").unwrap();
+
+    // 验证初始知识点
+    let metas_initial = select_meta_by_question(&conn, qid).unwrap();
+    assert_eq!(metas_initial.len(), 2);
+
+    // 删除旧的知识点，添加新的
+    delete_metas_by_question_and_key(&conn, qid, kp_key).unwrap();
+    insert_meta(&conn, qid, kp_key, "新知识点A").unwrap();
+    insert_meta(&conn, qid, kp_key, "新知识点B").unwrap();
+    insert_meta(&conn, qid, kp_key, "新知识点C").unwrap();
+
+    // 验证新知识点
+    let metas_new = select_meta_by_question(&conn, qid).unwrap();
+    assert_eq!(metas_new.len(), 3);
+    let values: Vec<&str> = metas_new.iter().map(|m| m.value.as_str()).collect();
+    assert!(values.contains(&"新知识点A"));
+    assert!(values.contains(&"新知识点B"));
+    assert!(values.contains(&"新知识点C"));
+}
+
+#[test]
+fn test_update_subject_workflow() {
+    let conn = setup_test_db();
+    let now = Utc::now().timestamp();
+    let qid = insert_question(&conn, Some("题目I"), "active", now).unwrap();
+
+    let subject_key = "system.Subject";
+
+    // 初始插入科目
+    insert_meta(&conn, qid, subject_key, "物理").unwrap();
+
+    // 验证初始科目
+    let metas_initial = select_meta_by_question(&conn, qid).unwrap();
+    assert_eq!(metas_initial.len(), 1);
+    assert_eq!(metas_initial[0].value, "物理");
+
+    // 删除旧的科目，添加新的
+    delete_metas_by_question_and_key(&conn, qid, subject_key).unwrap();
+    insert_meta(&conn, qid, subject_key, "化学").unwrap();
+
+    // 验证新科目
+    let metas_new = select_meta_by_question(&conn, qid).unwrap();
+    assert_eq!(metas_new.len(), 1);
+    assert_eq!(metas_new[0].value, "化学");
+}

@@ -89,4 +89,12 @@ impl<'a> MetaDao<'a> {
     pub fn list_all_subjects(&self) -> Result<Vec<String>, DbError> {
         crate::db::select_distinct_values_by_key(self.conn, SUBJECT_META_KEY)
     }
+
+    /// 删除某题目指定 key 的所有元信息记录。
+    pub fn delete_by_question_and_key(&self, question_id: QuestionId, key: MetaKey) -> Result<(), DbError> {
+        let qid_i64: i64 = i64::from(question_id);
+        let key_str = String::from(key);
+        crate::db::delete_metas_by_question_and_key(self.conn, qid_i64, &key_str)?;
+        Ok(())
+    }
 }

@@ -236,7 +236,8 @@ const goBack = () => {
 
 <style scoped>
 .session-container {
-  max-width: 700px;
+  max-width: 900px;
+  width: 100%;
 }
 
 .loading {

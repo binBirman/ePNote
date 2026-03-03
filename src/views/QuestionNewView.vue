@@ -8,10 +8,33 @@ const router = useRouter()
 
 const questionName = ref('')
 const questionSubject = ref('')
-const questionKnowledgePoint = ref('')
+const questionKnowledgePoints = ref<string[]>([])
+const newKnowledgePoint = ref('')
 const questionQuestionImages = ref<string[]>([])
 const questionAnswerImages = ref<string[]>([])
 const loading = ref(false)
+
+// 添加知识点
+const addKnowledgePoint = () => {
+  const kp = newKnowledgePoint.value.trim()
+  if (kp && !questionKnowledgePoints.value.includes(kp)) {
+    questionKnowledgePoints.value.push(kp)
+    newKnowledgePoint.value = ''
+  }
+}
+
+// 移除知识点
+const removeKnowledgePoint = (index: number) => {
+  questionKnowledgePoints.value.splice(index, 1)
+}
+
+// 处理知识点输入框的回车事件
+const handleKnowledgePointKeydown = (e: KeyboardEvent) => {
+  if (e.key === 'Enter') {
+    e.preventDefault()
+    addKnowledgePoint()
+  }
+}
 
 const handleSubmit = async () => {
   if (!questionName.value.trim()) {
@@ -24,8 +47,8 @@ const handleSubmit = async () => {
     return
   }
 
-  if (!questionKnowledgePoint.value.trim()) {
-    alert('请输入知识点')
+  if (questionKnowledgePoints.value.length === 0) {
+    alert('请至少添加一个知识点')
     return
   }
 
@@ -43,23 +66,23 @@ const handleSubmit = async () => {
     console.log('handleSubmit start')
     console.log('question_image_paths:', questionQuestionImages.value)
     console.log('answer_image_paths:', questionAnswerImages.value)
+    console.log('knowledge_points:', questionKnowledgePoints.value)
     loading.value = true
     await createQuestion({
       name: questionName.value,
       subject: questionSubject.value,
-      knowledge_points: questionKnowledgePoint.value
-        ? questionKnowledgePoint.value.split(',').map(s => s.trim()).filter(Boolean)
-        : [],
+      knowledge_points: questionKnowledgePoints.value,
       question_image_paths: questionQuestionImages.value,
       answer_image_paths: questionAnswerImages.value,
     })
 
     // 清空表单
-  questionName.value = ''
-  questionSubject.value = ''
-  questionKnowledgePoint.value = ''
-  questionQuestionImages.value = []
-  questionAnswerImages.value = []
+    questionName.value = ''
+    questionSubject.value = ''
+    questionKnowledgePoints.value = []
+    newKnowledgePoint.value = ''
+    questionQuestionImages.value = []
+    questionAnswerImages.value = []
 
     alert('题目创建成功！')
     router.push({ path: '/questions', query: { r: String(Date.now()) } })
@@ -76,7 +99,7 @@ const handleSubmit = async () => {
 }
 
 const handleCancel = () => {
-  if (questionName.value || questionSubject.value || questionKnowledgePoint.value ||
+  if (questionName.value || questionSubject.value || questionKnowledgePoints.value.length > 0 ||
       questionQuestionImages.value.length > 0 || questionAnswerImages.value.length > 0) {
     if (!confirm('确定要放弃当前编辑吗？')) {
       return
@@ -171,15 +194,24 @@ const removeAnswerImage = (index: number) => {
 
         <!-- 知识点 -->
         <div class="form-group">
-          <label class="form-label" for="knowledgePoint">知识点 *</label>
-          <input
-            id="knowledgePoint"
-            v-model="questionKnowledgePoint"
-            type="text"
-            class="form-input"
-            placeholder="请输入知识点..."
-            required
-          />
+          <label class="form-label">知识点 *（可多次添加）</label>
+          <div class="knowledge-point-input-group">
+            <input
+              v-model="newKnowledgePoint"
+              type="text"
+              class="form-input"
+              placeholder="输入知识点后点击添加"
+              @keydown="handleKnowledgePointKeydown"
+            />
+            <button type="button" class="add-kp-btn" @click="addKnowledgePoint">添加</button>
+          </div>
+          <div v-if="questionKnowledgePoints.length > 0" class="knowledge-points-list">
+            <div v-for="(kp, index) in questionKnowledgePoints" :key="index" class="knowledge-point-item">
+              <span class="kp-text">{{ kp }}</span>
+              <button type="button" class="remove-kp-btn" @click="removeKnowledgePoint(index)">×</button>
+            </div>
+          </div>
+          <div v-else class="kp-empty-hint">暂无知识点，请添加</div>
         </div>
 
         <!-- 题目图 -->
@@ -235,8 +267,8 @@ const removeAnswerImage = (index: number) => {
 <style scoped>
 .new-container {
   width: 100%;
-  max-width: 800px;
-  margin: 0 auto;
+  max-width: 900px;
+  margin: 0;
 }
 
 .back-section {
@@ -308,6 +340,73 @@ const removeAnswerImage = (index: number) => {
 
 .form-select {
   cursor: pointer;
+}
+
+/* 知识点输入样式 */
+.knowledge-point-input-group {
+  display: flex;
+  gap: 8px;
+}
+
+.knowledge-point-input-group .form-input {
+  flex: 1;
+}
+
+.add-kp-btn {
+  padding: 10px 20px;
+  background-color: #4CAF50;
+  border: none;
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.add-kp-btn:hover {
+  background-color: #45a049;
+}
+
+.knowledge-points-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.knowledge-point-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: #e8f5e9;
+  border: 1px solid #4CAF50;
+  border-radius: 16px;
+  padding: 6px 12px;
+}
+
+.kp-text {
+  color: #2e7d32;
+  font-size: 14px;
+}
+
+.remove-kp-btn {
+  background: none;
+  border: none;
+  color: #4CAF50;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.remove-kp-btn:hover {
+  color: #d32f2f;
+}
+
+.kp-empty-hint {
+  color: #999;
+  font-size: 13px;
+  margin-top: 8px;
 }
 
 .image-upload-area {

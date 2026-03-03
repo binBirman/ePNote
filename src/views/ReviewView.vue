@@ -129,7 +129,8 @@ const startReview = () => {
 
 <style scoped>
 .review-container {
-  max-width: 600px;
+  max-width: 800px;
+  width: 100%;
 }
 
 .page-title {

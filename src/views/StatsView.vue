@@ -147,6 +147,8 @@ const getProgressWidth = (count: number) => {
 <style scoped>
 .stats-container {
   max-width: 800px;
+  width: 100%;
+  margin-left: 0;
 }
 
 .loading {

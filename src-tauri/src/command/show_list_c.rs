@@ -34,7 +34,12 @@ impl ActiveQuestion {
                 status: v.state.as_str().to_string(),
                 knowledge_points: v.knowledge_points,
                 created_at: LogicalDay::from(v.created_at).to_string(),
-                last_review: LogicalDay::from(v.last_reviewed_at).to_string(),
+                // 如果 last_reviewed_at 为 0（没有复习记录），返回空字符串
+                last_review: if v.last_reviewed_at.0 == 0 {
+                    String::new()
+                } else {
+                    LogicalDay::from(v.last_reviewed_at).to_string()
+                },
             })
             .collect()
     }

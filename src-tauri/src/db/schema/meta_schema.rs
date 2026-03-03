@@ -40,6 +40,19 @@ pub fn delete_meta(conn: &Connection, meta_id: i64) -> Result<(), DbError> {
     Ok(())
 }
 
+/* 删除某题目指定 key 的所有元信息记录 */
+pub fn delete_metas_by_question_and_key(conn: &Connection, question_id: i64, key: &str) -> Result<(), DbError> {
+    conn.execute(
+        r#"
+        DELETE FROM meta
+        WHERE question_id = ?1 AND key = ?2
+        "#,
+        (question_id, key),
+    )?;
+
+    Ok(())
+}
+
 /*
     用ID查找元信息
     输入：

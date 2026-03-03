@@ -25,6 +25,29 @@ const editForm = ref({
   subject: '',
   knowledge_points: [] as string[],
 })
+const newKnowledgePoint = ref('')
+
+// 添加知识点
+const addKnowledgePoint = () => {
+  const kp = newKnowledgePoint.value.trim()
+  if (kp && !editForm.value.knowledge_points.includes(kp)) {
+    editForm.value.knowledge_points.push(kp)
+    newKnowledgePoint.value = ''
+  }
+}
+
+// 移除知识点
+const removeKnowledgePoint = (index: number) => {
+  editForm.value.knowledge_points.splice(index, 1)
+}
+
+// 处理知识点输入框的回车事件
+const handleKnowledgePointKeydown = (e: KeyboardEvent) => {
+  if (e.key === 'Enter') {
+    e.preventDefault()
+    addKnowledgePoint()
+  }
+}
 
 onMounted(async () => {
   const id = Number(route.params.id)
@@ -102,6 +125,7 @@ const getStateLabel = (state: QuestionState) => {
 const handleEdit = () => {
   if (!question.value) return
   // 进入编辑模式
+  newKnowledgePoint.value = ''
   editForm.value = {
     name: question.value.name || '',
     subject: question.value.subject || '',
@@ -139,6 +163,7 @@ const handleSaveEdit = async () => {
 
 const handleCancelEdit = () => {
   isEditing.value = false
+  newKnowledgePoint.value = ''
   // 恢复原始数据
   if (question.value) {
     editForm.value = {
@@ -199,14 +224,24 @@ const goBack = () => {
             <input v-model="editForm.subject" type="text" class="form-input" placeholder="请输入科目" />
           </div>
           <div class="form-group">
-            <label class="form-label">知识点（用逗号分隔）</label>
-            <input
-              :value="editForm.knowledge_points.join(', ')"
-              @input="editForm.knowledge_points = ($event.target as HTMLInputElement).value.split(',').map(s => s.trim()).filter(Boolean)"
-              type="text"
-              class="form-input"
-              placeholder="请输入知识点，用逗号分隔"
-            />
+            <label class="form-label">知识点（可多次添加）</label>
+            <div class="knowledge-point-input-group">
+              <input
+                v-model="newKnowledgePoint"
+                type="text"
+                class="form-input"
+                placeholder="输入知识点后点击添加"
+                @keydown="handleKnowledgePointKeydown"
+              />
+              <button type="button" class="add-kp-btn" @click="addKnowledgePoint">添加</button>
+            </div>
+            <div v-if="editForm.knowledge_points.length > 0" class="knowledge-points-list">
+              <div v-for="(kp, index) in editForm.knowledge_points" :key="index" class="knowledge-point-item">
+                <span class="kp-text">{{ kp }}</span>
+                <button type="button" class="remove-kp-btn" @click="removeKnowledgePoint(index)">×</button>
+              </div>
+            </div>
+            <div v-else class="kp-empty-hint">暂无知识点，请添加</div>
           </div>
         </div>
         <div class="action-buttons">
@@ -299,8 +334,8 @@ const goBack = () => {
 <style scoped>
 .detail-container {
   width: 100%;
-  max-width: 1000px;
-  margin: 0 auto;
+  max-width: 900px;
+  margin: 0;
 }
 
 .back-link {
@@ -482,6 +517,73 @@ const goBack = () => {
 .form-input:focus {
   outline: none;
   border-color: #4CAF50;
+}
+
+/* 知识点输入样式 */
+.knowledge-point-input-group {
+  display: flex;
+  gap: 8px;
+}
+
+.knowledge-point-input-group .form-input {
+  flex: 1;
+}
+
+.add-kp-btn {
+  padding: 10px 20px;
+  background-color: #4CAF50;
+  border: none;
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.add-kp-btn:hover {
+  background-color: #45a049;
+}
+
+.knowledge-points-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.knowledge-point-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: #e8f5e9;
+  border: 1px solid #4CAF50;
+  border-radius: 16px;
+  padding: 6px 12px;
+}
+
+.kp-text {
+  color: #2e7d32;
+  font-size: 14px;
+}
+
+.remove-kp-btn {
+  background: none;
+  border: none;
+  color: #4CAF50;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.remove-kp-btn:hover {
+  color: #d32f2f;
+}
+
+.kp-empty-hint {
+  color: #999;
+  font-size: 13px;
+  margin-top: 8px;
 }
 
 .section-title {

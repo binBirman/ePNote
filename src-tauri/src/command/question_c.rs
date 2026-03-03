@@ -5,7 +5,7 @@ use crate::app::{AppInner, AppState};
 use crate::domain::{enums::AssetType, enums::MetaKey, enums::SystemMetaKey, ids::QuestionId};
 use crate::server::question_manager::{
     add_question_images, create_question, delete_question, delete_question_image,
-    get_question_detail, rename_question, restore_question,
+    get_question_detail, rename_question, restore_question, update_question_meta,
 };
 use crate::util::time::LogicalDay;
 
@@ -239,8 +239,18 @@ pub fn update_question_comm(
         }
     }
 
-    // TODO: 后续可以添加更新科目和知识点的功能
-    // 目前后端只支持更新名称
+    // 更新科目和知识点
+    if data.subject.is_some() || data.knowledge_points.is_some() {
+        if let Err(e) = update_question_meta(
+            conn,
+            QuestionId::from(id),
+            data.subject.clone(),
+            data.knowledge_points.clone(),
+        ) {
+            eprintln!("Failed to update question meta: {:?}", e);
+            return Err(e.to_string());
+        }
+    }
 
     println!("Question updated with ID: {}", id);
     Ok(id.to_string())
