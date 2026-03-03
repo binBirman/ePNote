@@ -26,7 +26,7 @@ fn main() {
                 if let Ok(true) = check_init(root.clone()) {
                     println!("启动时自动加载 AppInner");
 
-                    let conn = Connection::open(root.join("db.sqlite")).expect("open db failed");
+                    let conn = ePNote::db::init_db(&root).expect("open db failed");
 
                     let asset_store = AssetStore::new(root.clone());
 
@@ -59,6 +59,12 @@ fn main() {
             question_c::get_image_base64,
             question_c::add_question_images_comm,
             question_c::delete_question_image_comm,
+            // 复习相关命令
+            review_c::process_review_comm,
+            review_c::recommend_questions_comm,
+            review_c::suspend_question_comm,
+            review_c::recover_question_comm,
+            review_c::list_subjects_comm,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

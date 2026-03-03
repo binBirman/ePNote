@@ -47,6 +47,28 @@ export interface QuestionInfo {
 
 export type QuestionState = 'NEW' | 'LEARNING' | 'STABLE' | 'DUE' | 'SUSPENDED';
 
+// 复习结果类型
+export type ReviewResult = 'CORRECT' | 'WRONG' | 'FUZZY';
+
+// 推荐结果
+export interface RecommendResult {
+  questions: RecommendQuestion[];
+  reasons: string[];
+  subject: string | null;
+}
+
+// 推荐题目
+export interface RecommendQuestion {
+  id: number;
+  name: string | null;
+  state: string;
+  created_at: string;
+  last_review_at: string | null;
+  correct_streak: number;
+  wrong_count: number;
+  due_at: string | null;
+}
+
 // export enum QuestionState {
 //   NEW,
 //   LEARNING,

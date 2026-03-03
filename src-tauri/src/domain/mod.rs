@@ -5,6 +5,7 @@ pub mod meta;
 pub mod question;
 pub mod question_info;
 pub mod review;
+pub mod state_machine;
 pub mod view;
 
 pub use asset::*;
@@ -14,4 +15,5 @@ pub use meta::*;
 pub use question::*;
 pub use question_info::*;
 pub use review::*;
+pub use state_machine::*;
 pub use view::*;

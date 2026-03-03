@@ -9,6 +9,11 @@ fn question_row_domain_roundtrip() {
         state: "NEW".to_string(),
         created_at: 1_600_000_000,
         deleted_at: None,
+        last_review_at: None,
+        last_result: None,
+        correct_streak: 0,
+        wrong_count: 0,
+        due_at: None,
     };
 
     let domain = question_repo::row_to_domain(&row).expect("row_to_domain failed");
@@ -29,6 +34,11 @@ fn question_row_domain_roundtrip_with_deleted_at() {
         state: "SUSPENDED".to_string(),
         created_at: 1_600_000_100,
         deleted_at: Some(1_700_000_000),
+        last_review_at: None,
+        last_result: None,
+        correct_streak: 0,
+        wrong_count: 0,
+        due_at: None,
     };
 
     let domain = question_repo::row_to_domain(&row).expect("row_to_domain failed");
@@ -51,6 +61,11 @@ fn question_row_invalid_state_errors() {
         state: "NOT_A_STATE".to_string(),
         created_at: 1_600_000_200,
         deleted_at: None,
+        last_review_at: None,
+        last_result: None,
+        correct_streak: 0,
+        wrong_count: 0,
+        due_at: None,
     };
 
     let res = question_repo::row_to_domain(&row);

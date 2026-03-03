@@ -51,8 +51,9 @@ impl<'a> ReviewDao<'a> {
         created_at: Timestamp,
     ) -> Result<ReviewId, DbError> {
         let timestamp_i64: i64 = created_at.into();
+        let result_str = result.as_str();
         let id =
-            crate::db::insert_review(self.conn, i64::from(qid), result.as_str(), timestamp_i64)?;
+            crate::db::insert_review(self.conn, i64::from(qid), result_str, timestamp_i64)?;
         Ok(ReviewId::from(id))
     }
 }

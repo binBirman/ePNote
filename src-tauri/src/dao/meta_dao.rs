@@ -7,6 +7,9 @@ use crate::domain::{
 };
 use crate::repo::primitive::*;
 
+/// 科目元信息的 key
+const SUBJECT_META_KEY: &str = "system.Subject";
+
 /// DAO for `Meta` using the lightweight `db` schema functions and repo converters.
 pub struct MetaDao<'a> {
     conn: &'a Connection,
@@ -80,5 +83,10 @@ impl<'a> MetaDao<'a> {
         let qid_i64: i64 = i64::from(question_id);
         let values = crate::db::select_meta_values_by_question_key(self.conn, qid_i64, key)?;
         Ok(values)
+    }
+
+    /// 查询所有不重复的科目值。
+    pub fn list_all_subjects(&self) -> Result<Vec<String>, DbError> {
+        crate::db::select_distinct_values_by_key(self.conn, SUBJECT_META_KEY)
     }
 }

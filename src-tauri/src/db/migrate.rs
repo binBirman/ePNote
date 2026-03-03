@@ -82,6 +82,17 @@ const MIGRATIONS: &[Migration] = &[
             ) r ON r.question_id = q.id
         "#,
     },
+    Migration {
+        version: 3,
+        name: "add_review_fields",
+        sql: r#"
+        ALTER TABLE question ADD COLUMN last_review_at INTEGER;
+        ALTER TABLE question ADD COLUMN last_result TEXT;
+        ALTER TABLE question ADD COLUMN correct_streak INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE question ADD COLUMN wrong_count INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE question ADD COLUMN due_at INTEGER;
+        "#,
+    },
 ];
 
 /*

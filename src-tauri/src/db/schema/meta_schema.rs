@@ -152,3 +152,36 @@ pub fn select_meta_values_by_question_key(
 
     Ok(values)
 }
+
+/*
+    查询所有不重复的科目值
+    输入：
+        key: 元信息 key，如 "system.Subject"
+    输出：
+        返回所有不重复的值列表
+*/
+pub fn select_distinct_values_by_key(
+    conn: &Connection,
+    key: &str,
+) -> Result<Vec<String>, DbError> {
+    let mut stmt = conn.prepare(
+        r#"
+        SELECT DISTINCT value
+        FROM meta
+        WHERE key = ?1
+        ORDER BY value
+        "#,
+    )?;
+
+    let rows = stmt.query_map((key,), |row| {
+        let v: String = row.get(0)?;
+        Ok(v)
+    })?;
+
+    let mut values = Vec::new();
+    for v in rows {
+        values.push(v?);
+    }
+
+    Ok(values)
+}
