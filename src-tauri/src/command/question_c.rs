@@ -4,8 +4,9 @@ use tauri::State;
 use crate::app::{AppInner, AppState};
 use crate::domain::{enums::AssetType, enums::MetaKey, enums::SystemMetaKey, ids::QuestionId};
 use crate::server::question_manager::{
-    add_question_images, create_question, delete_question, delete_question_image,
-    get_question_detail, rename_question, restore_question, update_question_meta,
+    add_question_images, cleanup_old_deleted_questions, create_question, delete_question,
+    delete_question_image, get_question_detail, permanently_delete_question, rename_question,
+    restore_question, update_question_meta,
 };
 use crate::util::time::LogicalDay;
 
@@ -114,6 +115,54 @@ pub fn restore_question_comm(state: tauri::State<AppState>, id: i64) -> Result<S
         }
         Err(e) => {
             eprintln!("Failed to restore question: {:?}", e);
+            Err(e.to_string())
+        }
+    }
+}
+
+#[tauri::command]
+pub fn permanently_delete_question_comm(state: tauri::State<AppState>, id: i64) -> Result<String, String> {
+    let guard = state.inner.lock().unwrap();
+    let conn = match &*guard {
+        Some(inner) => &inner.db,
+        None => return Err("App not initialized".to_string()),
+    };
+    let store = match &*guard {
+        Some(inner) => &inner.asset_store,
+        None => return Err("App not initialized".to_string()),
+    };
+    let qid = QuestionId::from(id);
+    match permanently_delete_question(&conn, &store, qid) {
+        Ok(_) => {
+            println!("Question permanently deleted with ID: {}", id);
+            Ok(id.to_string())
+        }
+        Err(e) => {
+            eprintln!("Failed to permanently delete question: {:?}", e);
+            Err(e.to_string())
+        }
+    }
+}
+
+#[tauri::command]
+pub fn cleanup_recycle_bin_comm(state: tauri::State<AppState>, days_threshold: Option<i64>) -> Result<usize, String> {
+    let guard = state.inner.lock().unwrap();
+    let conn = match &*guard {
+        Some(inner) => &inner.db,
+        None => return Err("App not initialized".to_string()),
+    };
+    let store = match &*guard {
+        Some(inner) => &inner.asset_store,
+        None => return Err("App not initialized".to_string()),
+    };
+    let days = days_threshold.unwrap_or(30);
+    match cleanup_old_deleted_questions(&conn, &store, days) {
+        Ok(count) => {
+            println!("Cleaned up {} old deleted questions", count);
+            Ok(count)
+        }
+        Err(e) => {
+            eprintln!("Failed to cleanup recycle bin: {:?}", e);
             Err(e.to_string())
         }
     }

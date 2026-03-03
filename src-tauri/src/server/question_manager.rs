@@ -118,6 +118,87 @@ pub fn restore_question(conn: &Connection, qid: QuestionId) -> Result<bool, AppE
     Ok(true)
 }
 
+/// 永久删除题目（物理删除）
+/// 输入：题目ID, AssetStore
+/// 删除数据库中的题目、元信息、资源、复习记录，并删除存储中的文件
+/// 输出：是否删除成功
+pub fn permanently_delete_question(
+    conn: &Connection,
+    store: &AssetStore,
+    qid: QuestionId,
+) -> Result<bool, AppError> {
+    let qd = QuestionDao::new(conn);
+    let md = MetaDao::new(conn);
+    let ad = AssetDao::new(conn);
+
+    // 1. 获取该题目的所有资源，用于后续删除文件
+    let assets = ad.list_by_question(qid.clone())?;
+
+    // 2. 删除存储中的文件
+    let mut entries_to_delete: Vec<(uuid::Uuid, String, std::path::PathBuf)> = Vec::new();
+    for asset in &assets {
+        if let Ok(uuid) = uuid::Uuid::parse_str(&asset.id.0.to_string()) {
+            let relative_path = asset.path.as_str();
+            // 构造回收相对路径
+            let recycle_relative = format!("recycle/{}/{}", uuid, relative_path);
+            entries_to_delete.push((uuid, relative_path, std::path::PathBuf::from(recycle_relative)));
+        }
+    }
+    if !entries_to_delete.is_empty() {
+        store.delete_physical(&entries_to_delete)?;
+    }
+
+    // 3. 删除数据库中的复习记录
+    let qid_i64: i64 = i64::from(qid.clone());
+    crate::db::delete_reviews_by_question(conn, qid_i64)?;
+
+    // 4. 删除数据库中的元信息
+    let metas = md.list_by_question(qid.clone())?;
+    for meta in metas {
+        md.delete(meta.id)?;
+    }
+
+    // 5. 删除数据库中的资源记录
+    for asset in &assets {
+        ad.delete(asset.id)?;
+    }
+
+    // 6. 删除数据库中的题目记录
+    let qid_i64: i64 = i64::from(qid);
+    crate::db::delete_question_by_id(conn, qid_i64)?;
+
+    Ok(true)
+}
+
+/// 清理回收站中超过指定天数的题目
+/// 输入：天数阈值（默认30天）
+/// 输出：删除的题目数量
+pub fn cleanup_old_deleted_questions(
+    conn: &Connection,
+    store: &AssetStore,
+    days_threshold: i64,
+) -> Result<usize, AppError> {
+    let qd = QuestionDao::new(conn);
+    let now = crate::util::time::now_ts();
+
+    // 计算阈值时间戳
+    let threshold_ts = Timestamp(now.0 - (days_threshold * 24 * 3600));
+
+    // 获取所有已删除且删除时间早于阈值的题目
+    let old_questions = qd.list_deleted_before(threshold_ts)?;
+
+    let mut deleted_count = 0;
+    for question in old_questions {
+        let qid = question.id;
+        // 永久删除每个题目
+        if permanently_delete_question(conn, store, qid).is_ok() {
+            deleted_count += 1;
+        }
+    }
+
+    Ok(deleted_count)
+}
+
 /// 题目改名
 /// 输入：题目ID，新题目名
 /// 输出：是否改名成功

@@ -154,4 +154,16 @@ impl<'a> QuestionDao<'a> {
     pub fn count_by_state(&self, state: &str) -> Result<i64, DbError> {
         crate::db::count_questions_by_state(self.conn, state)
     }
+
+    /// 查询已删除且删除时间早于指定时间戳的题目列表（用于清理回收站）
+    pub fn list_deleted_before(&self, before: Timestamp) -> Result<Vec<Question>, DbError> {
+        let rows = crate::db::select_deleted_questions_before(self.conn, before.as_i64())?;
+        let mut questions = Vec::new();
+        for row in rows {
+            let q = crate::repo::question_row_to_domain(&row)
+                .map_err(|e| DbError::Migration(format!("convert error: {:?}", e)))?;
+            questions.push(q);
+        }
+        Ok(questions)
+    }
 }

@@ -180,3 +180,20 @@ pub fn count_reviews_since_by_result(conn: &Connection, since: i64, result: &str
     )?;
     Ok(count)
 }
+
+/*
+    删除指定题目的所有复习记录
+    输入：
+        question_id: 题目ID
+    输出：
+        若删除成功，返回空值
+*/
+pub fn delete_reviews_by_question(conn: &Connection, question_id: i64) -> Result<(), DbError> {
+    conn.execute(
+        r#"
+        DELETE FROM review WHERE question_id = ?1
+        "#,
+        (question_id,),
+    )?;
+    Ok(())
+}

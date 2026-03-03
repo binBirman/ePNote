@@ -34,6 +34,14 @@ export function restoreQuestion(id: number) {
   return call<string>("restore_question_comm", { id });
 }
 
+export function permanentlyDeleteQuestion(id: number) {
+  return call<string>("permanently_delete_question_comm", { id });
+}
+
+export function cleanupRecycleBin(daysThreshold?: number) {
+  return call<number>("cleanup_recycle_bin_comm", { days_threshold: daysThreshold });
+}
+
 export function getQuestionData(id: number) {
   return call<QuestionInfo>("get_question_detail_comm", { id });
 }

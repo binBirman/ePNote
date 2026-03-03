@@ -54,6 +54,8 @@ fn main() {
             question_c::create_question_comm,
             question_c::delete_question_comm,
             question_c::restore_question_comm,
+            question_c::permanently_delete_question_comm,
+            question_c::cleanup_recycle_bin_comm,
             question_c::update_question_comm,
             question_c::get_question_detail_comm,
             question_c::get_image_base64,

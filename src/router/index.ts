@@ -55,6 +55,12 @@ const router = createRouter({
       component: () => import('../views/RecycleBinView.vue'),
       meta: { requiresInit: true }
     },
+    {
+      path: '/recycle-bin/:id',
+      name: 'recycle-bin-detail',
+      component: () => import('../views/RecycleBinDetailView.vue'),
+      meta: { requiresInit: true }
+    },
   ],
 })
 

@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import {
   show_list_deleted_questions_page,
   restoreQuestion,
-  deleteQuestion,
+  permanentlyDeleteQuestion,
 } from '@/api/question'
 import type { DeleteQuestion } from '@/types/question'
 import type { QuestionState } from '@/types/question'
@@ -137,14 +137,14 @@ const handlePermanentDelete = async (id?: number) => {
 
   try {
     for (const id of idsToDelete) {
-      await deleteQuestion(id)
+      await permanentlyDeleteQuestion(id)
     }
     selectedIds.value = []
     await loadRecycleBin()
-    alert('删除成功！')
+    alert('永久删除成功！')
   } catch (e) {
     error.value = e instanceof Error ? e.message : '删除失败'
-    console.error('Failed to delete question:', e)
+    console.error('Failed to permanently delete question:', e)
   }
 }
 
@@ -157,7 +157,7 @@ const hasSelected = computed(() => {
 })
 
 const goToDetail = (id: number) => {
-  router.push(`/questions/${id}`)
+  router.push(`/recycle-bin/${id}`)
 }
 
 const goBack = () => {

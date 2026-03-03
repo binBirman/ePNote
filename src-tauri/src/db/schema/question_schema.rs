@@ -511,3 +511,59 @@ pub fn count_questions_by_state(conn: &Connection, state: &str) -> Result<i64, D
     )?;
     Ok(count)
 }
+
+/*
+    查询已删除且删除时间早于指定时间戳的题目列表
+    输入：
+        before: 时间戳
+    输出：
+        返回已删除且删除时间早于指定时间戳的题目列表
+*/
+pub fn select_deleted_questions_before(
+    conn: &Connection,
+    before: i64,
+) -> Result<Vec<QuestionRow>, DbError> {
+    let mut stmt = conn.prepare(
+        r#"
+        SELECT id, name, state, created_at, deleted_at,
+               last_review_at, last_result, correct_streak, wrong_count, due_at
+        FROM question
+        WHERE deleted_at IS NOT NULL AND deleted_at < ?1
+        ORDER BY deleted_at ASC
+        "#,
+    )?;
+
+    let iter = stmt.query_map((before,), |row| {
+        Ok(QuestionRow {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            state: row.get(2)?,
+            created_at: row.get(3)?,
+            deleted_at: row.get(4)?,
+            last_review_at: row.get(5)?,
+            last_result: row.get(6)?,
+            correct_streak: row.get(7)?,
+            wrong_count: row.get(8)?,
+            due_at: row.get(9)?,
+        })
+    })?;
+
+    iter.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+}
+
+/*
+    根据ID物理删除题目（不检查deleted_at）
+    输入：
+        question_id: 题目ID
+    输出：
+        若删除成功，返回空值
+*/
+pub fn delete_question_by_id(conn: &Connection, question_id: i64) -> Result<(), DbError> {
+    conn.execute(
+        r#"
+        DELETE FROM question WHERE id = ?1
+        "#,
+        (question_id,),
+    )?;
+    Ok(())
+}
