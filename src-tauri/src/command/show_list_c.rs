@@ -76,7 +76,6 @@ pub fn show_subjects(state: tauri::State<AppState>) -> Result<Vec<String>, Strin
         None => return Err("App not initialized".to_string()),
     };
     let subjects = crate::db::select_all_subjects(conn).unwrap_or_default();
-    print!("查询到的科目数量 = {}\n", subjects.len());
     Ok(subjects)
 }
 
@@ -106,7 +105,6 @@ pub fn show_list_available_questions_page(
     };
     let views = list_available_questions_page(&conn, page, page_size).unwrap_or_default();
     let result = ActiveQuestion::new(views);
-    print!("查询到的可用题目数量 = {}\n", result.len());
     Ok(result)
 }
 
@@ -123,7 +121,6 @@ pub fn show_list_deleted_questions_page(
     };
     let views = list_deleted_questions_page(&conn, page, page_size).unwrap_or_default();
     let result = DeleteQuestion::new(views);
-    print!("查询到的已删除题目数量 = {}\n", result.len());
     Ok(result)
 }
 
@@ -143,11 +140,6 @@ pub fn show_list_available_questions_by_state_page(
         .map_err(|e| format!("invalid question state: {:?}", e))?;
     let views = list_questions_by_state_page(&conn, state, page, page_size).unwrap_or_default();
     let result = ActiveQuestion::new(views);
-    print!(
-        "查询到的状态为 {:?} 的题目数量 = {}\n",
-        question_state,
-        result.len()
-    );
     Ok(result)
 }
 
@@ -166,11 +158,6 @@ pub fn show_list_available_questions_by_subject_page(
     let views =
         list_questions_by_subject_page(&conn, subject.clone(), page, page_size).unwrap_or_default();
     let result = ActiveQuestion::new(views);
-    print!(
-        "查询到的科目为 {:?} 的题目数量 = {}\n",
-        subject.clone(),
-        result.len()
-    );
     Ok(result)
 }
 
@@ -196,11 +183,5 @@ pub fn show_list_available_questions_by_subject_and_state_page(
     )
     .unwrap_or_default();
     let result = ActiveQuestion::new(views);
-    print!(
-        "查询到的科目为 {:?} 状态为 {:?} 的题目数量 = {}\n",
-        subject,
-        question_state,
-        result.len()
-    );
     Ok(result)
 }

@@ -21,7 +21,6 @@ pub fn list_available_questions_page(
     let offset = page * page_size;
     let views = vd.list(offset as i64, page_size as i64)?;
 
-    println!("查询结果数量 = {}", views.len());
     Ok(views)
 }
 
@@ -73,7 +72,8 @@ pub fn list_questions_by_subject_and_state_page(
 ) -> Result<Vec<View>, AppError> {
     let vd = ViewDao::new(conn);
     let offset = page * page_size;
-    let views = vd.list_by_subject_and_state(&subject, &question_state, offset as i64, page_size as i64)?;
+    let views =
+        vd.list_by_subject_and_state(&subject, &question_state, offset as i64, page_size as i64)?;
     Ok(views)
 }
 

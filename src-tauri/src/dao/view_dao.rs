@@ -3,7 +3,8 @@ use crate::db::connection;
 use crate::db::error::DbError;
 use crate::db::schema::view_schema::{
     select_deleted_views_page, select_view_by_id, select_views_by_name, select_views_page,
-    select_views_page_by_state, select_views_page_by_subject, select_views_page_by_subject_and_state,
+    select_views_page_by_state, select_views_page_by_subject,
+    select_views_page_by_subject_and_state,
 };
 use crate::domain::enums::QuestionState;
 use crate::domain::ids::QuestionId;
@@ -74,12 +75,7 @@ impl<'a> ViewDao<'a> {
 
     /// 分页输出题目列表（不包含已删除题目）。
     pub fn list(&self, offset: i64, limit: i64) -> Result<Vec<View>, DbError> {
-        println!(
-            "ViewDao::list called with offset={}, limit={}",
-            offset, limit
-        );
         let rows = select_views_page(self.conn, offset, limit)?;
-        println!("查询到view row数据{}条", rows.len());
         let md = MetaDao::new(self.conn);
         let mut views = Vec::new();
         for row in rows {
@@ -98,14 +94,12 @@ impl<'a> ViewDao<'a> {
                 last_reviewed_at: Timestamp::from(row.last_reviewed_at.unwrap_or(0)),
             });
         }
-        println!("查询到View数据{}条", views.len());
         Ok(views)
     }
 
     /// 分页输已删除出题目列表。
     pub fn list_deleted(&self, offset: i64, limit: i64) -> Result<Vec<View>, DbError> {
         let rows = select_deleted_views_page(self.conn, offset, limit)?;
-        println!("查询到view数据{}条", rows.len());
         let md = MetaDao::new(self.conn);
         let mut views = Vec::new();
         for row in rows {
@@ -124,7 +118,6 @@ impl<'a> ViewDao<'a> {
                 last_reviewed_at: Timestamp::from(row.last_reviewed_at.unwrap_or(0)),
             });
         }
-        println!("查询到View数据{}条", views.len());
         Ok(views)
     }
 
@@ -154,7 +147,6 @@ impl<'a> ViewDao<'a> {
                 last_reviewed_at: Timestamp::from(row.last_reviewed_at.unwrap_or(0)),
             });
         }
-        println!("查询到View数据{}条", views.len());
         if views.is_empty() {
             Err(DbError::NotFound)
         } else {
@@ -189,7 +181,6 @@ impl<'a> ViewDao<'a> {
                 last_reviewed_at: Timestamp::from(row.last_reviewed_at.unwrap_or(0)),
             });
         }
-        println!("查询到View数据{}条", views.len());
         if views.is_empty() {
             Err(DbError::NotFound)
         } else {
@@ -205,7 +196,8 @@ impl<'a> ViewDao<'a> {
         offset: i64,
         limit: i64,
     ) -> Result<Vec<View>, DbError> {
-        let rows = select_views_page_by_subject_and_state(self.conn, offset, limit, subject, state)?;
+        let rows =
+            select_views_page_by_subject_and_state(self.conn, offset, limit, subject, state)?;
         let md = MetaDao::new(self.conn);
         let mut views = Vec::new();
         for row in rows {
@@ -224,7 +216,6 @@ impl<'a> ViewDao<'a> {
                 last_reviewed_at: Timestamp::from(row.last_reviewed_at.unwrap_or(0)),
             });
         }
-        println!("查询到View数据{}条", views.len());
         Ok(views)
     }
 }

@@ -48,7 +48,6 @@ pub fn select_all_subjects(conn: &Connection) -> Result<Vec<String>, DbError> {
         若找到，返回Some(ViewRow)
 */
 pub fn select_view_by_id(conn: &Connection, id: i64) -> Result<ViewRow, DbError> {
-    println!("调用 select_view_by_id，id={}", id);
     let mut stmt = conn.prepare(
         r#"
         SELECT id, name, state, created_at, deleted_at, subject, last_reviewed_at
@@ -84,7 +83,6 @@ pub fn select_view_by_id(conn: &Connection, id: i64) -> Result<ViewRow, DbError>
         若找到，返回Some(ViewRow)
 */
 pub fn select_views_by_name(conn: &Connection, name: &str) -> Result<Vec<ViewRow>, DbError> {
-    println!("调用 select_views_by_name，name={}", name);
     let mut stmt = conn.prepare(
         r#"
         SELECT id, name, state, created_at, deleted_at, subject, last_reviewed_at
@@ -132,8 +130,6 @@ pub fn select_views_page(
     offset: i64,
     limit: i64,
 ) -> Result<Vec<ViewRow>, DbError> {
-    println!("调用 select_views_page，offset={}, limit={}", offset, limit);
-    println!("当前数据库位置：{:?}", conn.path());
     let mut stmt = conn.prepare(
         r#"
         SELECT id, name, state, created_at, deleted_at, subject, last_reviewed_at
@@ -155,7 +151,6 @@ pub fn select_views_page(
             last_reviewed_at: row.get(6)?,
         })
     })?;
-    println!("查询到view row数据{}条", iter.size_hint().0);
 
     iter.collect::<Result<Vec<_>, _>>().map_err(Into::into)
 }
@@ -175,10 +170,6 @@ pub fn select_views_page_by_state(
     limit: i64,
     state: &str,
 ) -> Result<Vec<ViewRow>, DbError> {
-    println!(
-        "调用 select_views_page_by_state，offset={}, limit={}, state={}",
-        offset, limit, state
-    );
     let mut stmt = conn.prepare(
         r#"
         SELECT id, name, state, created_at, deleted_at, subject, last_reviewed_at
@@ -219,10 +210,6 @@ pub fn select_views_page_by_subject(
     limit: i64,
     subject: &str,
 ) -> Result<Vec<ViewRow>, DbError> {
-    println!(
-        "调用 select_views_page_by_subject，offset={}, limit={}, subject={}",
-        offset, limit, subject
-    );
     let mut stmt = conn.prepare(
         r#"
         SELECT id, name, state, created_at, deleted_at, subject, last_reviewed_at
@@ -261,10 +248,6 @@ pub fn select_deleted_views_page(
     offset: i64,
     limit: i64,
 ) -> Result<Vec<ViewRow>, DbError> {
-    println!(
-        "调用 select_deleted_views_page，offset={}, limit={}",
-        offset, limit
-    );
     let mut stmt = conn.prepare(
         r#"
         SELECT id, name, state, created_at, deleted_at, subject, last_reviewed_at
@@ -297,10 +280,6 @@ pub fn select_views_page_by_subject_and_state(
     subject: &str,
     state: &str,
 ) -> Result<Vec<ViewRow>, DbError> {
-    println!(
-        "调用 select_views_page_by_subject_and_state，offset={}, limit={}, subject={}, state={}",
-        offset, limit, subject, state
-    );
     let mut stmt = conn.prepare(
         r#"
         SELECT id, name, state, created_at, deleted_at, subject, last_reviewed_at

@@ -60,19 +60,19 @@ pub fn check_init(root: PathBuf) -> Result<bool, InitError> {
     // 检查 .instance.json 是否存在并合法
     let instance_file = root.join(".instance.json");
     if !instance_file.exists() {
-        print!("instance file exist");
+        println!("instance file exist");
         return Ok(false);
     }
 
     // 尝试读取并验证
     let instance = load_instance(&instance_file)?;
     validate_instance(&instance)?;
-    print!("validate instance ok");
+    println!("validate instance ok");
 
     // 简单检查 DB 文件是否存在
     let db_file = root.join("db.sqlite");
     if !db_file.exists() {
-        print!("db file exist");
+        println!("db file exist");
         return Ok(false);
     }
 
