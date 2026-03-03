@@ -477,3 +477,37 @@ pub fn select_stale_questions(
 
     iter.collect::<Result<Vec<_>, _>>().map_err(Into::into)
 }
+
+/*
+    统计总题目数（未删除）
+    输出：
+        返回总题目数
+*/
+pub fn count_questions(conn: &Connection) -> Result<i64, DbError> {
+    let count: i64 = conn.query_row(
+        r#"
+        SELECT COUNT(*) FROM question WHERE deleted_at IS NULL
+        "#,
+        [],
+        |row| row.get(0),
+    )?;
+    Ok(count)
+}
+
+/*
+    统计指定状态的题目数
+    输入：
+        state: 题目状态
+    输出：
+        返回题目数
+*/
+pub fn count_questions_by_state(conn: &Connection, state: &str) -> Result<i64, DbError> {
+    let count: i64 = conn.query_row(
+        r#"
+        SELECT COUNT(*) FROM question WHERE state = ?1 AND deleted_at IS NULL
+        "#,
+        [state],
+        |row| row.get(0),
+    )?;
+    Ok(count)
+}

@@ -57,3 +57,32 @@ export function recoverQuestion(questionId: number) {
 export function listSubjects() {
   return call<string[]>("list_subjects_comm", {});
 }
+
+/**
+ * 统计结果
+ */
+export interface StatsData {
+  total_questions: number;
+  today_reviewed: number;
+  total_reviews: number;
+  correct_count: number;
+  wrong_count: number;
+  fuzzy_count: number;
+  state_counts: {
+    new_count: number;
+    learning_count: number;
+    stable_count: number;
+    due_count: number;
+    suspended_count: number;
+  };
+  today_pending: number;
+  average_accuracy: number;
+}
+
+/**
+ * 获取统计信息
+ * @returns 统计数据
+ */
+export function getStats() {
+  return call<StatsData>("get_stats_comm", {});
+}

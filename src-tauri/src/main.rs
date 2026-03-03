@@ -65,6 +65,7 @@ fn main() {
             review_c::suspend_question_comm,
             review_c::recover_question_comm,
             review_c::list_subjects_comm,
+            review_c::get_stats_comm,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

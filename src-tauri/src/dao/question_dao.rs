@@ -144,4 +144,14 @@ impl<'a> QuestionDao<'a> {
         }
         Ok(questions)
     }
+
+    /// 统计总题目数（未删除）
+    pub fn count_all(&self) -> Result<i64, DbError> {
+        crate::db::count_questions(self.conn)
+    }
+
+    /// 统计各状态的题目数
+    pub fn count_by_state(&self, state: &str) -> Result<i64, DbError> {
+        crate::db::count_questions_by_state(self.conn, state)
+    }
 }

@@ -1,27 +1,34 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { mockStats, getQuestions } from '../mock/data'
+import { ref, computed, onMounted } from 'vue'
+import { getStats, type StatsData } from '@/api/review'
 
-const questions = getQuestions()
+const stats = ref<StatsData | null>(null)
+const loading = ref(true)
 
-// 扩展统计信息
-const todayReviewed = computed(() => 2) // Mock 今日已复习数
-const totalReviews = computed(() => 15) // Mock 总复习次数
-const averageAccuracy = computed(() => 73) // Mock 平均准确率
+onMounted(async () => {
+  try {
+    stats.value = await getStats()
+  } catch (e) {
+    console.error('加载统计失败:', e)
+  } finally {
+    loading.value = false
+  }
+})
 
 // 按状态统计的题目数
 const stateStats = computed(() => {
+  if (!stats.value) return { NEW: 0, LEARNING: 0, STABLE: 0 }
   return {
-    NEW: questions.filter(q => q.state === 'NEW').length,
-    LEARNING: questions.filter(q => q.state === 'LEARNING').length,
-    STABLE: questions.filter(q => q.state === 'STABLE').length
+    NEW: stats.value.state_counts.new_count,
+    LEARNING: stats.value.state_counts.learning_count,
+    STABLE: stats.value.state_counts.stable_count
   }
 })
 
 // 计算进度百分比
 const getProgressWidth = (count: number) => {
-  const total = questions.length
-  return total > 0 ? (count / total * 100).toFixed(1) : 0
+  if (!stats.value || stats.value.total_questions === 0) return '0'
+  return (count / stats.value.total_questions * 100).toFixed(1)
 }
 </script>
 
@@ -29,12 +36,16 @@ const getProgressWidth = (count: number) => {
   <div class="stats-container">
     <h1 class="page-title">统计</h1>
 
+    <!-- 加载状态 -->
+    <div v-if="loading" class="loading">加载中...</div>
+
+    <template v-else-if="stats">
     <!-- 概览卡片 -->
     <div class="overview-cards">
       <div class="stat-card">
         <div class="stat-icon">📚</div>
         <div class="stat-info">
-          <div class="stat-value">{{ mockStats.totalQuestions }}</div>
+          <div class="stat-value">{{ stats.total_questions }}</div>
           <div class="stat-label">总题目数</div>
         </div>
       </div>
@@ -42,7 +53,7 @@ const getProgressWidth = (count: number) => {
       <div class="stat-card">
         <div class="stat-icon">🎯</div>
         <div class="stat-info">
-          <div class="stat-value">{{ todayReviewed }}</div>
+          <div class="stat-value">{{ stats.today_reviewed }}</div>
           <div class="stat-label">今日已复习</div>
         </div>
       </div>
@@ -50,7 +61,7 @@ const getProgressWidth = (count: number) => {
       <div class="stat-card">
         <div class="stat-icon">🔄</div>
         <div class="stat-info">
-          <div class="stat-value">{{ totalReviews }}</div>
+          <div class="stat-value">{{ stats.total_reviews }}</div>
           <div class="stat-label">总复习次数</div>
         </div>
       </div>
@@ -58,7 +69,7 @@ const getProgressWidth = (count: number) => {
       <div class="stat-card">
         <div class="stat-icon">📊</div>
         <div class="stat-info">
-          <div class="stat-value">{{ averageAccuracy }}%</div>
+          <div class="stat-value">{{ stats.average_accuracy.toFixed(0) }}%</div>
           <div class="stat-label">平均准确率</div>
         </div>
       </div>
@@ -118,23 +129,31 @@ const getProgressWidth = (count: number) => {
       <div class="today-stats">
         <div class="today-item">
           <div class="today-label">待复习</div>
-          <div class="today-value">{{ mockStats.todayPending }}</div>
+          <div class="today-value">{{ stats.today_pending }}</div>
         </div>
         <div class="today-item">
           <div class="today-label">已完成</div>
-          <div class="today-value completed">{{ todayReviewed }}</div>
+          <div class="today-value completed">{{ stats.today_reviewed }}</div>
         </div>
       </div>
       <div class="today-tip">
         💡 继续加油！完成今天的复习计划。
       </div>
     </div>
+    </template>
   </div>
 </template>
 
 <style scoped>
 .stats-container {
   max-width: 800px;
+}
+
+.loading {
+  text-align: center;
+  color: #666;
+  font-size: 16px;
+  padding: 40px;
 }
 
 .page-title {

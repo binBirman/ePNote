@@ -16,8 +16,6 @@ pub struct ViewRow {
 
 /* 输出所有科目 */
 pub fn select_all_subjects(conn: &Connection) -> Result<Vec<String>, DbError> {
-    println!("调用 select_all_subjects");
-    println!("当前数据库位置：{:?}", conn.path());
     let mut stmt = conn.prepare(
         r#"
         SELECT DISTINCT subject

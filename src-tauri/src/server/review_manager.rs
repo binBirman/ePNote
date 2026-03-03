@@ -58,6 +58,37 @@ pub enum RecommendReason {
     StaleReview,
 }
 
+/// 统计结果
+#[derive(Debug, Clone)]
+pub struct StatsResult {
+    /// 总题目数
+    pub total_questions: i64,
+    /// 今日已复习数
+    pub today_reviewed: i64,
+    /// 总复习次数
+    pub total_reviews: i64,
+    /// 正确次数
+    pub correct_count: i64,
+    /// 错误次数
+    pub wrong_count: i64,
+    /// 模糊次数
+    pub fuzzy_count: i64,
+    /// 各状态题目数
+    pub state_counts: StateCounts,
+    /// 今日待复习数
+    pub today_pending: i64,
+}
+
+/// 状态统计
+#[derive(Debug, Clone)]
+pub struct StateCounts {
+    pub new_count: i64,
+    pub learning_count: i64,
+    pub stable_count: i64,
+    pub due_count: i64,
+    pub suspended_count: i64,
+}
+
 impl<'a> ReviewManager<'a> {
     pub fn new(conn: &'a Connection) -> Self {
         Self {
@@ -346,6 +377,89 @@ impl<'a> ReviewManager<'a> {
         self.meta_dao
             .list_all_subjects()
             .map_err(|e| format!("failed to list subjects: {}", e))
+    }
+
+    /// 获取统计信息
+    pub fn get_stats(&self) -> Result<StatsResult, String> {
+        // 计算今日开始时间（凌晨 00:00:00）
+        let now = now_ts();
+        let today_start = self.get_today_start_timestamp(now);
+
+        // 总题目数
+        let total_questions = self.question_dao
+            .count_all()
+            .map_err(|e| format!("failed to count questions: {}", e))?;
+
+        // 今日已复习数
+        let today_reviewed = self.review_dao
+            .count_today(today_start)
+            .map_err(|e| format!("failed to count today reviews: {}", e))?;
+
+        // 总复习次数
+        let total_reviews = self.review_dao
+            .count_all()
+            .map_err(|e| format!("failed to count all reviews: {}", e))?;
+
+        // 正确次数
+        let correct_count = self.review_dao
+            .count_by_result("CORRECT")
+            .map_err(|e| format!("failed to count correct: {}", e))?;
+
+        // 错误次数
+        let wrong_count = self.review_dao
+            .count_by_result("WRONG")
+            .map_err(|e| format!("failed to count wrong: {}", e))?;
+
+        // 模糊次数
+        let fuzzy_count = self.review_dao
+            .count_by_result("FUZZY")
+            .map_err(|e| format!("failed to count fuzzy: {}", e))?;
+
+        // 各状态题目数
+        let new_count = self.question_dao
+            .count_by_state("NEW")
+            .map_err(|e| format!("failed to count NEW: {}", e))?;
+        let learning_count = self.question_dao
+            .count_by_state("LEARNING")
+            .map_err(|e| format!("failed to count LEARNING: {}", e))?;
+        let stable_count = self.question_dao
+            .count_by_state("STABLE")
+            .map_err(|e| format!("failed to count STABLE: {}", e))?;
+        let due_count = self.question_dao
+            .count_by_state("DUE")
+            .map_err(|e| format!("failed to count DUE: {}", e))?;
+        let suspended_count = self.question_dao
+            .count_by_state("SUSPENDED")
+            .map_err(|e| format!("failed to count SUSPENDED: {}", e))?;
+
+        // 今日待复习数 = NEW + LEARNING + DUE
+        let today_pending = new_count + learning_count + due_count;
+
+        Ok(StatsResult {
+            total_questions,
+            today_reviewed,
+            total_reviews,
+            correct_count,
+            wrong_count,
+            fuzzy_count,
+            state_counts: StateCounts {
+                new_count,
+                learning_count,
+                stable_count,
+                due_count,
+                suspended_count,
+            },
+            today_pending,
+        })
+    }
+
+    /// 计算今日开始的时间戳（凌晨 00:00:00）
+    fn get_today_start_timestamp(&self, now: Timestamp) -> i64 {
+        let now_i64 = now.as_i64();
+        // 一天的秒数
+        let day_seconds = 24 * 60 * 60;
+        // 计算今日开始时间戳
+        (now_i64 / day_seconds) * day_seconds
     }
 }
 

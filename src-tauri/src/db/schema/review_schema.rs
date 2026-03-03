@@ -109,3 +109,74 @@ pub fn select_reviews_by_time_range(
         .collect::<Result<Vec<_>, _>>()
         .map_err(Into::into)
 }
+
+/*
+    统计总复习次数
+    输出：
+        返回总复习次数
+*/
+pub fn count_reviews(conn: &Connection) -> Result<i64, DbError> {
+    let count: i64 = conn.query_row(
+        r#"
+        SELECT COUNT(*) FROM review
+        "#,
+        [],
+        |row| row.get(0),
+    )?;
+    Ok(count)
+}
+
+/*
+    统计指定结果的复习次数
+    输入：
+        result: 复习结果
+    输出：
+        返回复习次数
+*/
+pub fn count_reviews_by_result(conn: &Connection, result: &str) -> Result<i64, DbError> {
+    let count: i64 = conn.query_row(
+        r#"
+        SELECT COUNT(*) FROM review WHERE result = ?1
+        "#,
+        [result],
+        |row| row.get(0),
+    )?;
+    Ok(count)
+}
+
+/*
+    统计指定时间之后的复习次数
+    输入：
+        since: 时间戳
+    输出：
+        返回复习次数
+*/
+pub fn count_reviews_since(conn: &Connection, since: i64) -> Result<i64, DbError> {
+    let count: i64 = conn.query_row(
+        r#"
+        SELECT COUNT(*) FROM review WHERE reviewed_at >= ?1
+        "#,
+        [since],
+        |row| row.get(0),
+    )?;
+    Ok(count)
+}
+
+/*
+    统计指定时间之后指定结果的复习次数
+    输入：
+        since: 时间戳
+        result: 复习结果
+    输出：
+        返回复习次数
+*/
+pub fn count_reviews_since_by_result(conn: &Connection, since: i64, result: &str) -> Result<i64, DbError> {
+    let count: i64 = conn.query_row(
+        r#"
+        SELECT COUNT(*) FROM review WHERE reviewed_at >= ?1 AND result = ?2
+        "#,
+        (since, result),
+        |row| row.get(0),
+    )?;
+    Ok(count)
+}

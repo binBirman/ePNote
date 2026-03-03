@@ -145,3 +145,69 @@ fn question_to_data(question: Question) -> QuestionData {
         due_at: question.due_at.map(|t| t.as_i64().to_string()),
     }
 }
+
+/// 统计结果数据
+#[derive(Serialize, Deserialize)]
+pub struct StatsData {
+    pub total_questions: i64,
+    pub today_reviewed: i64,
+    pub total_reviews: i64,
+    pub correct_count: i64,
+    pub wrong_count: i64,
+    pub fuzzy_count: i64,
+    pub state_counts: StateCountsData,
+    pub today_pending: i64,
+    /// 平均准确率
+    pub average_accuracy: f64,
+}
+
+/// 状态统计
+#[derive(Serialize, Deserialize)]
+pub struct StateCountsData {
+    pub new_count: i64,
+    pub learning_count: i64,
+    pub stable_count: i64,
+    pub due_count: i64,
+    pub suspended_count: i64,
+}
+
+/// 获取统计信息
+#[tauri::command]
+pub fn get_stats_comm(
+    state: tauri::State<AppState>,
+) -> Result<StatsData, String> {
+    let guard = state.inner.lock().unwrap();
+    let conn = match &*guard {
+        Some(inner) => &inner.db,
+        None => return Err("App not initialized".to_string()),
+    };
+
+    let manager = ReviewManager::new(conn);
+    let stats = manager.get_stats()?;
+
+    // 计算平均准确率（正确次数 / 总复习次数）
+    let total = stats.correct_count + stats.wrong_count + stats.fuzzy_count;
+    let average_accuracy = if total > 0 {
+        (stats.correct_count as f64 / total as f64) * 100.0
+    } else {
+        0.0
+    };
+
+    Ok(StatsData {
+        total_questions: stats.total_questions,
+        today_reviewed: stats.today_reviewed,
+        total_reviews: stats.total_reviews,
+        correct_count: stats.correct_count,
+        wrong_count: stats.wrong_count,
+        fuzzy_count: stats.fuzzy_count,
+        state_counts: StateCountsData {
+            new_count: stats.state_counts.new_count,
+            learning_count: stats.state_counts.learning_count,
+            stable_count: stats.state_counts.stable_count,
+            due_count: stats.state_counts.due_count,
+            suspended_count: stats.state_counts.suspended_count,
+        },
+        today_pending: stats.today_pending,
+        average_accuracy,
+    })
+}

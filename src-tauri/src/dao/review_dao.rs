@@ -56,4 +56,24 @@ impl<'a> ReviewDao<'a> {
             crate::db::insert_review(self.conn, i64::from(qid), result_str, timestamp_i64)?;
         Ok(ReviewId::from(id))
     }
+
+    /// 统计总复习次数
+    pub fn count_all(&self) -> Result<i64, DbError> {
+        crate::db::count_reviews(self.conn)
+    }
+
+    /// 统计指定结果的复习次数
+    pub fn count_by_result(&self, result: &str) -> Result<i64, DbError> {
+        crate::db::count_reviews_by_result(self.conn, result)
+    }
+
+    /// 统计今日复习次数
+    pub fn count_today(&self, today_start: i64) -> Result<i64, DbError> {
+        crate::db::count_reviews_since(self.conn, today_start)
+    }
+
+    /// 统计今日指定结果的复习次数
+    pub fn count_today_by_result(&self, today_start: i64, result: &str) -> Result<i64, DbError> {
+        crate::db::count_reviews_since_by_result(self.conn, today_start, result)
+    }
 }
