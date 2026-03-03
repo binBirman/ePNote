@@ -4,10 +4,7 @@ import { useRouter, useRoute } from 'vue-router'
 import type { ActiveQuestion } from '@/types/question'
 // import type { QuestionState } from '@/types/question'
 import {
-  show_list_available_questions_page,
-  show_list_available_questions_by_state_page,
-  show_list_available_questions_by_subject_page,
-  show_list_available_questions_by_subject_and_state_page,
+  showQuestionsWithFilters,
   show_subjects,
   show_states,
 } from '@/api/question'
@@ -57,9 +54,26 @@ watch(() => route.query.r, (v) => {
   if (v) loadQuestions()
 })
 
+// 防抖定时器
+let filterDebounceTimer: ReturnType<typeof setTimeout> | null = null
+
+const debouncedLoad = (page = 0) => {
+  if (filterDebounceTimer) {
+    clearTimeout(filterDebounceTimer)
+  }
+  filterDebounceTimer = setTimeout(() => {
+    loadQuestions(page)
+  }, 100) // 100ms 防抖
+}
+
 // reload when filters change
-watch(subjectFilter, () => loadQuestions(0))
-watch(stateFilter, () => loadQuestions(0))
+watch(subjectFilter, () => debouncedLoad(0))
+watch(stateFilter, () => debouncedLoad(0))
+// 搜索关键字变化时也重新加载（从第一页开始）
+watch(searchKeyword, () => {
+  // 搜索关键字变化时，通过后端进行全局搜索
+  debouncedLoad(0)
+})
 
 const mapActive = (a: ActiveQuestion): LocalQuestion => ({
   id: a.id,
@@ -73,22 +87,19 @@ const mapActive = (a: ActiveQuestion): LocalQuestion => ({
 
 const loadQuestions = async (page = 0) => {
   try {
-    let res: ActiveQuestion[] = []
-    if (subjectFilter.value !== 'ALL' && stateFilter.value !== 'ALL') {
-      // 同时按科目和状态筛选
-      res = await show_list_available_questions_by_subject_and_state_page(
-        subjectFilter.value,
-        stateFilter.value,
-        page,
-        pageSize
-      )
-    } else if (subjectFilter.value !== 'ALL') {
-      res = await show_list_available_questions_by_subject_page(subjectFilter.value, page, pageSize)
-    } else if (stateFilter.value !== 'ALL') {
-      res = await show_list_available_questions_by_state_page(stateFilter.value, page, pageSize)
-    } else {
-      res = await show_list_available_questions_page(page, pageSize)
-    }
+    // 使用综合筛选API，将所有筛选条件传递给后端
+    // 将空字符串转换为 null
+    const keyword = searchKeyword.value.trim() || null
+    const subject = subjectFilter.value !== 'ALL' ? subjectFilter.value : null
+    const state = stateFilter.value !== 'ALL' ? stateFilter.value : null
+
+    const res = await showQuestionsWithFilters(
+      keyword,
+      subject,
+      state,
+      page,
+      pageSize
+    )
 
     displayedQuestions.value = res.map(mapActive)
 
@@ -103,39 +114,8 @@ const loadQuestions = async (page = 0) => {
 }
 
 const filteredQuestions = computed(() => {
-  let filtered = displayedQuestions.value
-
-  // 搜索过滤（支持题名和ID）
-  if (searchKeyword.value) {
-    const keyword = searchKeyword.value.trim()
-
-    // 尝试作为ID搜索
-    const idNumber = parseInt(keyword)
-    if (!isNaN(idNumber)) {
-      const byId = filtered.find(q => q.id === idNumber)
-      if (byId) return [byId]
-    }
-
-    // 按名称搜索
-    const lowerKeyword = keyword.toLowerCase()
-    filtered = filtered.filter(q =>
-      q.name.toLowerCase().includes(lowerKeyword) ||
-      q.subject.toLowerCase().includes(lowerKeyword) ||
-      q.knowledgePoint.toLowerCase().includes(lowerKeyword)
-    )
-  }
-
-  // 科目过滤
-  if (subjectFilter.value !== 'ALL') {
-    filtered = filtered.filter(q => q.subject === subjectFilter.value)
-  }
-
-  // 状态过滤
-  if (stateFilter.value !== 'ALL') {
-    filtered = filtered.filter(q => q.state === stateFilter.value)
-  }
-
-  return filtered
+  // 所有筛选都由后端处理，直接返回结果
+  return displayedQuestions.value
 })
 
 const getStateColor = (state: string) => {

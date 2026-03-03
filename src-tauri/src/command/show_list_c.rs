@@ -114,6 +114,46 @@ pub fn show_list_available_questions_page(
 }
 
 #[tauri::command]
+pub fn show_questions_with_filters(
+    app_state: tauri::State<AppState>,
+    keyword: Option<String>,
+    subject: Option<String>,
+    question_state: Option<String>,
+    page: usize,
+    page_size: usize,
+) -> Result<Vec<ActiveQuestion>, String> {
+    let guard = app_state.inner.lock().unwrap();
+    let conn = match &*guard {
+        Some(inner) => &inner.db,
+        None => return Err("App not initialized\n".to_string()),
+    };
+
+    // 将 "ALL" 转换为 None
+    let subject_filter = if subject.as_deref() == Some("ALL") {
+        None
+    } else {
+        subject
+    };
+    let state_filter = if question_state.as_deref() == Some("ALL") {
+        None
+    } else {
+        question_state
+    };
+
+    let views = list_questions_with_filters(
+        &conn,
+        keyword,
+        subject_filter,
+        state_filter,
+        page,
+        page_size,
+    )
+    .unwrap_or_default();
+    let result = ActiveQuestion::new(views);
+    Ok(result)
+}
+
+#[tauri::command]
 pub fn show_list_deleted_questions_page(
     state: tauri::State<AppState>,
     page: usize,

@@ -54,6 +54,24 @@ export function show_list_available_questions_page(page: number, pageSize: numbe
   });
 }
 
+// 综合筛选题目（关键字 + 科目 + 状态）
+export function showQuestionsWithFilters(
+  keyword: string | null,
+  subject: string | null,
+  state: string | null,
+  page: number,
+  pageSize: number
+) {
+  console.log("发送筛选参数:", { keyword, subject, state, page, pageSize })
+  return call<ActiveQuestion[]>("show_questions_with_filters", {
+    keyword,
+    subject,
+    questionState: state,
+    page,
+    pageSize,
+  });
+}
+
 export function show_list_deleted_questions_page(page: number, pageSize: number) {
   return call<DeleteQuestion[]>("show_list_deleted_questions_page", {
     page,

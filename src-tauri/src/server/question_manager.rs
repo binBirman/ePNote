@@ -131,8 +131,8 @@ pub fn permanently_delete_question(
     let md = MetaDao::new(conn);
     let ad = AssetDao::new(conn);
 
-    // 1. 获取该题目的所有资源，用于后续删除文件
-    let assets = ad.list_by_question(qid.clone())?;
+    // 1. 获取该题目的所有资源（包括软删除的），用于后续删除文件
+    let assets = ad.list_all_by_question(qid.clone())?;
 
     // 2. 删除存储中的文件
     let mut entries_to_delete: Vec<(uuid::Uuid, String, std::path::PathBuf)> = Vec::new();
@@ -158,9 +158,9 @@ pub fn permanently_delete_question(
         md.delete(meta.id)?;
     }
 
-    // 5. 删除数据库中的资源记录
+    // 5. 删除数据库中的资源记录（物理删除）
     for asset in &assets {
-        ad.delete(asset.id)?;
+        ad.delete_physical(asset.id)?;
     }
 
     // 6. 删除数据库中的题目记录

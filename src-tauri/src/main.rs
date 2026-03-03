@@ -45,6 +45,7 @@ fn main() {
             init_c::tauri_init_note,
             init_c::tauri_check_init_default,
             show_list_c::show_list_available_questions_page,
+            show_list_c::show_questions_with_filters,
             show_list_c::show_list_deleted_questions_page,
             show_list_c::show_list_available_questions_by_state_page,
             show_list_c::show_list_available_questions_by_subject_page,

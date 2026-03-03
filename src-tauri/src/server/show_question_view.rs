@@ -90,3 +90,25 @@ pub fn find_question_by_name(conn: &Connection, name: String) -> Result<Vec<View
     let views = vd.get_by_name(&name)?;
     Ok(views)
 }
+
+/// 按关键字、科目、状态搜索题目（综合筛选）
+pub fn list_questions_with_filters(
+    conn: &Connection,
+    keyword: Option<String>,
+    subject: Option<String>,
+    state: Option<String>,
+    page: usize,
+    page_size: usize,
+) -> Result<Vec<View>, AppError> {
+    let vd = ViewDao::new(conn);
+    let offset = page * page_size;
+    let views = vd.list_with_filters(
+        keyword.as_deref(),
+        subject.as_deref(),
+        state.as_deref(),
+        offset as i64,
+        page_size as i64,
+    )?;
+
+    Ok(views)
+}

@@ -57,6 +57,13 @@ impl<'a> AssetDao<'a> {
         Ok(ts)
     }
 
+    /// 物理删除资源（永久删除）
+    pub fn delete_physical(&self, id: AssetId) -> Result<(), DbError> {
+        let id_i64: i64 = i64::from(id);
+        crate::db::delete_asset_physical(self.conn, id_i64)?;
+        Ok(())
+    }
+
     /// 逻辑恢复资源
     pub fn restore(&self, id: AssetId) -> Result<(), DbError> {
         let id_i64: i64 = i64::from(id);
@@ -68,6 +75,19 @@ impl<'a> AssetDao<'a> {
     pub fn list_by_question(&self, question_id: QuestionId) -> Result<Vec<Asset>, DbError> {
         let qid_i64: i64 = i64::from(question_id);
         let rows = crate::db::select_asset_by_question(self.conn, qid_i64)?;
+        let mut assets = Vec::new();
+        for row in rows {
+            let a = crate::repo::asset_row_to_domain(&row)
+                .map_err(|e| DbError::Migration(format!("convert error: {:?}", e)))?;
+            assets.push(a);
+        }
+        Ok(assets)
+    }
+
+    /// 列出某题目的所有资源（包括软删除的），用于永久删除时清理所有关联数据
+    pub fn list_all_by_question(&self, question_id: QuestionId) -> Result<Vec<Asset>, DbError> {
+        let qid_i64: i64 = i64::from(question_id);
+        let rows = crate::db::select_all_assets_by_question(self.conn, qid_i64)?;
         let mut assets = Vec::new();
         for row in rows {
             let a = crate::repo::asset_row_to_domain(&row)

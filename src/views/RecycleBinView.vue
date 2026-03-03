@@ -273,6 +273,10 @@ const goBack = () => {
   width: 100%;
   max-width: 800px;
   margin: 0;
+  background-color: #fff;
+  min-height: 100vh;
+  padding: 24px;
+  border-radius: 12px;
 }
 
 .header-section {
@@ -289,17 +293,23 @@ const goBack = () => {
 }
 
 .back-btn {
-  background: none;
-  border: none;
+  background-color: #ffffff;
+  border: 2px solid #4CAF50;
   color: #4CAF50;
-  font-size: 14px;
+  font-size: 16px;
+  font-weight: 600;
   cursor: pointer;
-  padding: 8px 16px;
-  transition: color 0.2s;
+  padding: 12px 24px;
+  border-radius: 8px;
+  transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .back-btn:hover {
-  color: #45a049;
+  background-color: #4CAF50;
+  color: #ffffff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .toolbar {
@@ -348,7 +358,7 @@ const goBack = () => {
 
 .action-btn:disabled {
   background-color: #e0e0e0;
-  color: #999;
+  color: #fff;
   cursor: not-allowed;
 }
 
@@ -379,7 +389,7 @@ const goBack = () => {
   align-items: center;
   gap: 8px;
   padding: 12px 16px;
-  background-color: #fafafa;
+  background-color: #f5f5f5;
   border-radius: 8px;
   margin-bottom: 12px;
 }
@@ -391,7 +401,7 @@ const goBack = () => {
 }
 
 .select-label {
-  color: #666;
+  color: #333;
   font-size: 14px;
   user-select: none;
 }
@@ -410,7 +420,9 @@ const goBack = () => {
 
 .question-item:hover {
   background-color: #fafafa;
-  border-color: #ddd;
+  border-color: #4CAF50;
+  transform: translateX(4px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .question-checkbox {

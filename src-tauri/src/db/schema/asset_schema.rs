@@ -58,6 +58,19 @@ pub fn restore_asset(conn: &Connection, asset_id: i64) -> Result<(), DbError> {
     Ok(())
 }
 
+/* 永久删除一条记录（物理删除） */
+pub fn delete_asset_physical(conn: &Connection, asset_id: i64) -> Result<(), DbError> {
+    conn.execute(
+        r#"
+        DELETE FROM asset
+        WHERE id = ?1
+        "#,
+        (asset_id,),
+    )?;
+
+    Ok(())
+}
+
 /* 用ID查找资源 */
 pub fn select_asset_by_id(conn: &Connection, id: i64) -> Result<Option<AssetRow>, DbError> {
     let mut stmt = conn.prepare(
@@ -84,6 +97,35 @@ pub fn select_asset_by_id(conn: &Connection, id: i64) -> Result<Option<AssetRow>
     }
 
     Ok(None)
+}
+
+/* 查找某题目的所有资源（包括软删除的） */
+pub fn select_all_assets_by_question(
+    conn: &Connection,
+    question_id: i64,
+) -> Result<Vec<AssetRow>, DbError> {
+    let mut stmt = conn.prepare(
+        r#"
+        SELECT id, question_id, type, path, created_at, deleted_at
+        FROM asset
+        WHERE question_id = ?1
+        "#,
+    )?;
+
+    let asset_iter = stmt.query_map((question_id,), |row| {
+        Ok(AssetRow {
+            id: row.get(0)?,
+            question_id: row.get(1)?,
+            type_: row.get(2)?,
+            path: row.get(3)?,
+            created_at: row.get(4)?,
+            deleted_at: row.get(5)?,
+        })
+    })?;
+
+    asset_iter
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Into::into)
 }
 
 /* 查找某题目的所有资源 */
