@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "epnote",
-  "version": "0.1.0",
+  "productName": "ePNote",
+  "version": "1.0.0",
   "identifier": "com.epnote.app",
   "build": {
     "frontendDist": "../dist",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "e-pnote",
+        "title": "ePNote",
         "width": 800,
         "height": 600,
         "resizable": true,
