@@ -8,6 +8,7 @@ const router = useRouter()
 const mockPath = ref('')
 const loading = ref(false)
 const error = ref('')
+const success = ref(false)
 
 
 
@@ -56,10 +57,12 @@ const handleInit = async () => {
 
   loading.value = true
   error.value = ''
+  success.value = false
 
   try {
     await tauri_init_note(mockPath.value)
-    router.push('/review')
+    success.value = true
+    // 不再自动跳转，提示用户重启应用
   } catch (err: unknown) {
     console.error('初始化失败:', err)
     error.value = err instanceof Error
@@ -104,6 +107,11 @@ const handleInit = async () => {
       >
         {{ loading ? '初始化中...' : '初始化系统' }}
       </button>
+
+      <div v-if="success" class="success-msg">
+        <p>初始化成功！</p>
+        <p class="restart-hint">请重启应用程序以使配置生效</p>
+      </div>
 
     </div>
   </div>
@@ -218,5 +226,27 @@ const handleInit = async () => {
   background-color: #e0e0e0;
   color: #999;
   cursor: not-allowed;
+}
+
+.success-msg {
+  margin-top: 24px;
+  padding: 16px;
+  background-color: #e8f5e9;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.success-msg p {
+  color: #4CAF50;
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.restart-hint {
+  color: #666 !important;
+  font-size: 14px !important;
+  font-weight: normal !important;
+  margin-top: 8px !important;
 }
 </style>
