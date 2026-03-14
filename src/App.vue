@@ -50,14 +50,20 @@ body {
   overflow-y: auto;
   overflow-x: hidden;
   padding: 30px 40px;
-  /* 无侧边栏时不需要左边距 */
-  padding-left: 0;
   margin-left: 0;
+  display: flex;
+  justify-content: center;
+}
+
+/* 统一让各页面根容器在主内容区中居中显示 */
+.main-content > * {
+  width: 100%;
+  max-width: 1200px;
 }
 
 /* 有侧边栏时，内容区需要为侧边栏留出空间 */
 .main-content.with-sidebar {
-  padding-left: 220px; /* 侧边栏宽度200px + 20px间距 */
+  margin-left: 200px;
 }
 
 button {

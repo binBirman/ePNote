@@ -1,13 +1,18 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { getStats, type StatsData } from '@/api/review'
+import { getStats, getDailyReviewStatus, type StatsData, type DailyReviewStatus } from '@/api/review'
 
 const stats = ref<StatsData | null>(null)
+const dailyStatus = ref<DailyReviewStatus | null>(null)
 const loading = ref(true)
 
 onMounted(async () => {
   try {
+    // 获取基础统计数据
     stats.value = await getStats()
+
+    // 获取今日复习状态
+    dailyStatus.value = await getDailyReviewStatus()
   } catch (e) {
     console.error('加载统计失败:', e)
   } finally {
@@ -23,6 +28,18 @@ const stateStats = computed(() => {
     LEARNING: stats.value.state_counts.learning_count,
     STABLE: stats.value.state_counts.stable_count
   }
+})
+
+// 今日待复习数（使用更准确的推荐系统数据）
+const todayPending = computed(() => {
+  if (!dailyStatus.value) return stats.value?.today_pending || 0
+  return dailyStatus.value.recommended_count - dailyStatus.value.reviewed_count
+})
+
+// 今日已完成数（使用更准确的推荐系统数据）
+const todayCompleted = computed(() => {
+  if (!dailyStatus.value) return stats.value?.today_reviewed || 0
+  return dailyStatus.value.reviewed_count
 })
 
 // 计算进度百分比
@@ -129,15 +146,20 @@ const getProgressWidth = (count: number) => {
       <div class="today-stats">
         <div class="today-item">
           <div class="today-label">待复习</div>
-          <div class="today-value">{{ stats.today_pending }}</div>
+          <div class="today-value">{{ todayPending }}</div>
         </div>
         <div class="today-item">
           <div class="today-label">已完成</div>
-          <div class="today-value completed">{{ stats.today_reviewed }}</div>
+          <div class="today-value completed">{{ todayCompleted }}</div>
         </div>
       </div>
       <div class="today-tip">
-        💡 继续加油！完成今天的复习计划。
+        <template v-if="todayPending <= 0">
+          🎉 恭喜！今日复习计划已完成！
+        </template>
+        <template v-else>
+          💡 继续加油！还剩 {{ todayPending }} 题未复习。
+        </template>
       </div>
     </div>
     </template>
