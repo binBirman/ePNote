@@ -93,6 +93,28 @@ const MIGRATIONS: &[Migration] = &[
         ALTER TABLE question ADD COLUMN due_at INTEGER;
         "#,
     },
+    Migration {
+        version: 4,
+        name: "recommendation_engine",
+        sql: r#"
+        CREATE TABLE IF NOT EXISTS recommendation (
+            day INTEGER NOT NULL,
+            question_id INTEGER NOT NULL,
+            score REAL NOT NULL,
+            PRIMARY KEY(day, question_id),
+            FOREIGN KEY(question_id) REFERENCES question(id)
+        );
+
+        CREATE VIEW IF NOT EXISTS review_summary AS
+            SELECT
+                question_id,
+                COUNT(*) AS review_count,
+                MAX(reviewed_at) AS last_reviewed_at,
+                SUM(CASE WHEN result != 'correct' THEN 1 ELSE 0 END) * 1.0 / COUNT(*) AS error_rate
+            FROM review
+            GROUP BY question_id;
+        "#,
+    },
 ];
 
 /*

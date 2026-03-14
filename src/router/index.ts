@@ -26,6 +26,12 @@ const router = createRouter({
       meta: { requiresInit: true }
     },
     {
+      path: '/review/summary',
+      name: 'review-summary',
+      component: () => import('../views/ReviewSummaryView.vue'),
+      meta: { requiresInit: true }
+    },
+    {
       path: '/questions',
       name: 'questions',
       component: () => import('../views/QuestionsView.vue'),

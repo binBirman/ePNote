@@ -69,6 +69,11 @@ fn main() {
             review_c::recover_question_comm,
             review_c::list_subjects_comm,
             review_c::get_stats_comm,
+            // 推荐系统命令
+            recommendation_c::get_daily_recommendation_comm,
+            recommendation_c::get_recommendation_list_comm,
+            recommendation_c::get_daily_review_status_comm,
+            recommendation_c::get_today_review_records_comm,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

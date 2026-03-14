@@ -296,3 +296,35 @@ fn test_update_subject_workflow() {
     assert_eq!(metas_new.len(), 1);
     assert_eq!(metas_new[0].value, "化学");
 }
+
+#[test]
+fn test_v4_migration_recommendation_table() {
+    let conn = setup_test_db();
+
+    // 验证 schema_version 为 4
+    let version: i32 = conn.query_row("SELECT version FROM schema_version", [], |row| row.get(0)).unwrap();
+    assert_eq!(version, 4);
+
+    // 验证 recommendation 表存在
+    conn.query_row("SELECT 1 FROM recommendation LIMIT 1", [], |_| Ok(())).unwrap_err(); // 表为空，查不到数据，但表存在
+
+    // 验证 review_summary 视图存在
+    // 插入测试数据
+    let now = Utc::now().timestamp();
+    let qid = insert_question(&conn, Some("测试题"), "active", now).unwrap();
+    insert_review(&conn, qid, "correct", now).unwrap();
+    insert_review(&conn, qid, "wrong", now + 10).unwrap();
+    insert_review(&conn, qid, "fuzzy", now + 20).unwrap();
+
+    // 查询视图
+    let result: (i64, i64, i64, f64) = conn.query_row(
+        "SELECT question_id, review_count, last_reviewed_at, error_rate FROM review_summary WHERE question_id = ?1",
+        [qid],
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+    ).unwrap();
+
+    assert_eq!(result.0, qid);
+    assert_eq!(result.1, 3);  // review_count
+    assert_eq!(result.2, now + 20);  // last_reviewed_at
+    assert!((result.3 - 0.6666).abs() < 0.01);  // error_rate = 2/3 ≈ 0.666
+}

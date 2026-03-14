@@ -9,7 +9,12 @@
       "Bash(npm run type-check)",
       "Bash(npm run build)",
       "Bash(cargo build:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(npm run tauri build:*)",
+      "Bash(dir:*)",
+      "Bash(move:*)",
+      "Bash(ren \"D:\\\\chb\\\\巧思集\\\\原创源码\\\\ePNote\\\\src-tauri\\\\src\\\\server\\\\recommendation_test.rs\" \"tests\\\\recommendation_test.rs\")",
+      "Bash(cmd /c \"move D:\\\\chb\\\\巧思集\\\\原创源码\\\\ePNote\\\\src-tauri\\\\src\\\\server\\\\recommendation_test.rs D:\\\\chb\\\\巧思集\\\\原创源码\\\\ePNote\\\\src-tauri\\\\src\\\\server\\\\tests\\\\recommendation_test.rs\")"
     ]
   }
 }

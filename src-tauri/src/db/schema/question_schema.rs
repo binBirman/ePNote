@@ -567,3 +567,41 @@ pub fn delete_question_by_id(conn: &Connection, question_id: i64) -> Result<(), 
     )?;
     Ok(())
 }
+
+/*
+    查询所有未删除的题目（用于推荐系统）
+    输出：
+        返回所有未删除的题目列表
+*/
+pub fn select_all_active_questions(conn: &Connection) -> Result<Vec<QuestionRow>, DbError> {
+    let mut stmt = conn.prepare(
+        r#"
+        SELECT id, name, state, created_at, deleted_at,
+               last_review_at, last_result, correct_streak, wrong_count, due_at
+        FROM question
+        WHERE deleted_at IS NULL
+        "#
+    )?;
+
+    let rows = stmt.query_map([], |row| {
+        Ok(QuestionRow {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            state: row.get(2)?,
+            created_at: row.get(3)?,
+            deleted_at: row.get(4)?,
+            last_review_at: row.get(5)?,
+            last_result: row.get(6)?,
+            correct_streak: row.get(7)?,
+            wrong_count: row.get(8)?,
+            due_at: row.get(9)?,
+        })
+    })?;
+
+    let mut questions = Vec::new();
+    for row in rows {
+        questions.push(row?);
+    }
+
+    Ok(questions)
+}

@@ -76,4 +76,38 @@ impl<'a> ReviewDao<'a> {
     pub fn count_today_by_result(&self, today_start: i64, result: &str) -> Result<i64, DbError> {
         crate::db::count_reviews_since_by_result(self.conn, today_start, result)
     }
+
+    /// 插入复习记录（使用字符串结果），返回新记录的自增 ID。
+    pub fn insert_str(
+        &self,
+        qid: QuestionId,
+        result: &str,
+        created_at: Timestamp,
+    ) -> Result<ReviewId, DbError> {
+        let timestamp_i64: i64 = created_at.into();
+        let id = crate::db::insert_review(self.conn, i64::from(qid), result, timestamp_i64)?;
+        Ok(ReviewId::from(id))
+    }
+
+    /// 获取所有题目的错误率（从 review_summary 视图）
+    pub fn get_all_error_rates(&self) -> Result<std::collections::HashMap<i64, f64>, DbError> {
+        let mut stmt = self.conn.prepare(
+            r#"
+            SELECT question_id, error_rate
+            FROM review_summary
+            "#
+        )?;
+
+        let rows = stmt.query_map([], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, f64>(1)?))
+        })?;
+
+        let mut map = std::collections::HashMap::new();
+        for row in rows {
+            let (qid, rate) = row?;
+            map.insert(qid, rate);
+        }
+
+        Ok(map)
+    }
 }

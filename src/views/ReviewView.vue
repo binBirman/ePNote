@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { recommendQuestions, listSubjects } from '@/api/review'
+import { getRecommendationList, getDailyReviewStatus, listSubjects } from '@/api/review'
 
 const router = useRouter()
 
@@ -12,6 +12,13 @@ const loading = ref(false)
 const reviewLimit = ref<number>(10) // 默认复习10题
 const maxLimit = ref<number>(50) // 最大限制
 
+// 每日复习状态
+const reviewStatus = ref({
+  recommended_count: 0,
+  reviewed_count: 0,
+  is_completed: false
+})
+
 onMounted(async () => {
   loading.value = true
   try {
@@ -19,6 +26,11 @@ onMounted(async () => {
     const subjectList = await listSubjects()
     subjects.value = ['全部', ...subjectList]
     selectedSubject.value = '全部'
+
+    // 获取每日复习状态
+    await loadReviewStatus()
+
+    // 加载推荐题目
     await loadPendingQuestions()
   } catch (e) {
     console.error('加载数据失败:', e)
@@ -27,12 +39,21 @@ onMounted(async () => {
   }
 })
 
+// 加载每日复习状态
+const loadReviewStatus = async () => {
+  try {
+    const status = await getDailyReviewStatus()
+    reviewStatus.value = status
+  } catch (e) {
+    console.error('获取复习状态失败:', e)
+  }
+}
+
 const loadPendingQuestions = async () => {
   try {
-    // 获取推荐题目（不限制科目）
-    const subject = selectedSubject.value === '全部' ? undefined : selectedSubject.value
-    const result = await recommendQuestions(maxLimit.value, subject)
-    pendingQuestions.value = result.questions
+    // 使用新推荐系统获取每日推荐
+    const result = await getRecommendationList(maxLimit.value)
+    pendingQuestions.value = result
   } catch (e) {
     console.error('加载推荐题目失败:', e)
     pendingQuestions.value = []
@@ -49,19 +70,36 @@ const pendingCount = computed(() => {
   return pendingQuestions.value.length
 })
 
+// 是否已完成今日推荐
+const isCompleted = computed(() => reviewStatus.value.is_completed)
+
+// 按钮文本
+const buttonText = computed(() => {
+  if (reviewStatus.value.recommended_count === 0) {
+    return '开始复习'
+  }
+  return isCompleted.value ? '查看结果' : '开始复习'
+})
+
 // 计算实际可复习的题数（不超过待复习总数）
 const actualLimit = computed(() => {
   return Math.min(reviewLimit.value, pendingCount.value)
 })
 
 const startReview = () => {
-  router.push({
-    name: 'review-session',
-    query: {
-      subject: selectedSubject.value === '全部' ? 'ALL' : selectedSubject.value,
-      limit: reviewLimit.value.toString()
-    }
-  })
+  if (isCompleted.value) {
+    // 已完成，跳转到总结页面
+    router.push('/review/summary')
+  } else {
+    // 开始复习
+    router.push({
+      name: 'review-session',
+      query: {
+        subject: selectedSubject.value === '全部' ? 'ALL' : selectedSubject.value,
+        limit: reviewLimit.value.toString()
+      }
+    })
+  }
 }
 </script>
 
@@ -105,15 +143,37 @@ const startReview = () => {
           class="limit-input"
           min="1"
           :max="pendingCount"
+          :disabled="isCompleted"
         />
-        <button class="limit-btn" @click="reviewLimit = Math.min(pendingCount, reviewLimit + 1)">+</button>
-        <button class="limit-btn" @click="reviewLimit = Math.min(pendingCount, reviewLimit + 5)">+5</button>
+        <button class="limit-btn" @click="reviewLimit = Math.min(pendingCount, reviewLimit + 1)" :disabled="isCompleted">+</button>
+        <button class="limit-btn" @click="reviewLimit = Math.min(pendingCount, reviewLimit + 5)" :disabled="isCompleted">+5</button>
       </div>
       <div class="limit-hint">（共 {{ pendingCount }} 题可复习）</div>
     </div>
 
-    <button class="start-btn" :disabled="actualLimit === 0" @click="startReview">
-      开始复习 {{ actualLimit > 0 ? `（${actualLimit}题）` : '' }}
+    <!-- 复习状态 -->
+    <div v-if="reviewStatus.recommended_count > 0" class="status-card">
+      <div class="status-info">
+        <span class="status-label">今日进度：</span>
+        <span class="status-value">{{ reviewStatus.reviewed_count }} / {{ reviewStatus.recommended_count }}</span>
+        <span v-if="isCompleted" class="status-completed">（已完成）</span>
+        <span v-else class="status-remaining">（还剩 {{ reviewStatus.recommended_count - reviewStatus.reviewed_count }} 题）</span>
+      </div>
+      <div class="status-progress">
+        <div
+          class="status-progress-bar"
+          :style="{ width: (reviewStatus.reviewed_count / reviewStatus.recommended_count * 100) + '%' }"
+        ></div>
+      </div>
+    </div>
+
+    <button
+      class="start-btn"
+      :class="{ completed: isCompleted }"
+      :disabled="actualLimit === 0 && !isCompleted"
+      @click="startReview"
+    >
+      {{ buttonText }} {{ !isCompleted && actualLimit > 0 ? `（${actualLimit}题）` : '' }}
     </button>
 
     <div class="info-card">
@@ -229,6 +289,58 @@ const startReview = () => {
   background-color: #e0e0e0;
 }
 
+/* 复习状态卡片 */
+.status-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+.status-info {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.status-label {
+  font-size: 14px;
+  color: #666;
+}
+
+.status-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+  margin-right: 8px;
+}
+
+.status-completed {
+  font-size: 14px;
+  color: #4CAF50;
+  font-weight: 500;
+}
+
+.status-remaining {
+  font-size: 14px;
+  color: #ff9800;
+}
+
+.status-progress {
+  height: 8px;
+  background-color: #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.status-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #4CAF50, #8BC34A);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
 .start-btn {
   width: 100%;
   padding: 18px;
@@ -251,6 +363,14 @@ const startReview = () => {
   background-color: #ccc;
   cursor: not-allowed;
   transform: none;
+}
+
+.start-btn.completed {
+  background: linear-gradient(135deg, #2196F3, #1976D2);
+}
+
+.start-btn.completed:hover {
+  background: linear-gradient(135deg, #1E88E5, #1565C0);
 }
 
 .limit-selector {

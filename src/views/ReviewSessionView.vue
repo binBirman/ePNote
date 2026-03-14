@@ -1,15 +1,28 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { recommendQuestions, processReview, listSubjects } from '@/api/review'
+import { getRecommendationList, processReview, listSubjects } from '@/api/review'
 import { getQuestionData, getImageBase64 } from '@/api/question'
 import type { RecommendQuestion, ReviewResult, QuestionImage } from '@/types/question'
+
+// 新推荐系统的题目类型
+interface RecommendedQuestion {
+  question_id: number
+  name: string | null
+  score: number
+  state: string
+  due_at: number | null
+  correct_streak: number
+  wrong_count: number
+  last_result: string | null
+  error_rate: number | null
+}
 
 const router = useRouter()
 const route = useRoute()
 
 // 推荐题目（简化数据）
-const recommendQuestionsData = ref<RecommendQuestion[]>([])
+const recommendQuestionsData = ref<RecommendedQuestion[]>([])
 const questionDetails = ref<Map<number, any>>(new Map())
 // 图片 base64 数据
 const questionImages = ref<Map<number, QuestionImage[]>>(new Map())
@@ -34,16 +47,15 @@ onMounted(async () => {
   loading.value = true
 
   try {
-    // 获取推荐题目
-    const subject = selectedSubject.value === 'ALL' ? undefined : selectedSubject.value
-    const result = await recommendQuestions(reviewLimit.value, subject)
-    recommendQuestionsData.value = result.questions
+    // 使用新推荐系统获取每日推荐
+    const result = await getRecommendationList(reviewLimit.value)
+    recommendQuestionsData.value = result
 
     // 加载题目详情和图片
     for (const q of recommendQuestionsData.value) {
       try {
-        const detail = await getQuestionData(q.id)
-        questionDetails.value.set(q.id, detail)
+        const detail = await getQuestionData(q.question_id)
+        questionDetails.value.set(q.question_id, detail)
 
         // 加载题目图片 base64
         const qImages = await Promise.all(
@@ -52,7 +64,7 @@ onMounted(async () => {
             asset_id: img.asset_id
           }))
         )
-        questionImages.value.set(q.id, qImages.filter((img: QuestionImage) => img.path))
+        questionImages.value.set(q.question_id, qImages.filter((img: QuestionImage) => img.path))
 
         // 加载答案图片 base64
         const aImages = await Promise.all(
@@ -61,9 +73,9 @@ onMounted(async () => {
             asset_id: img.asset_id
           }))
         )
-        answerImages.value.set(q.id, aImages.filter((img: QuestionImage) => img.path))
+        answerImages.value.set(q.question_id, aImages.filter((img: QuestionImage) => img.path))
       } catch (e) {
-        console.error(`加载题目 ${q.id} 详情失败:`, e)
+        console.error(`加载题目 ${q.question_id} 详情失败:`, e)
       }
     }
 
@@ -84,7 +96,7 @@ const currentQuestion = computed(() => {
   if (!q) return null
   return {
     ...q,
-    detail: questionDetails.value.get(q.id)
+    detail: questionDetails.value.get(q.question_id)
   }
 })
 
@@ -100,25 +112,34 @@ const handleReview = async (result: ReviewResult) => {
 
   // 调用后端 API 提交复习结果
   try {
-    await processReview(q.id, result)
+    await processReview(q.question_id, result)
   } catch (e) {
     console.error('提交复习结果失败:', e)
   }
 
-  reviewResults.value.push({
-    questionId: q.id,
+  // 保存复习结果（包括题目名称）
+  const resultItem = {
+    questionId: q.question_id,
+    questionName: q.name || '',
     result
-  })
+  }
+  reviewResults.value.push(resultItem)
 
   showAnswer.value = false
   currentIndex.value++
 
+  // 复习完成，跳转到总结页面
   if (currentIndex.value >= recommendQuestionsData.value.length) {
-    isComplete.value = true
+    // 将复习结果存入 sessionStorage（用于总结页面）
+    sessionStorage.setItem('reviewResults', JSON.stringify(reviewResults.value))
+
+    // 跳转到总结页面
+    router.push('/review/summary')
   }
 }
 
 const goBack = () => {
+  sessionStorage.removeItem('reviewResults')
   router.push('/review')
 }
 </script>
@@ -154,9 +175,9 @@ const goBack = () => {
         </div>
 
         <!-- 题目图区域 -->
-        <div v-if="questionImages.get(currentQuestion.id)?.length" class="question-images">
+        <div v-if="questionImages.get(currentQuestion.question_id)?.length" class="question-images">
           <img
-            v-for="img in questionImages.get(currentQuestion.id)"
+            v-for="img in questionImages.get(currentQuestion.question_id)"
             :key="img.asset_id"
             :src="img.path"
             :alt="`题目图片`"
@@ -175,9 +196,9 @@ const goBack = () => {
         <!-- 答案区域（图片） -->
         <div v-if="showAnswer" class="answer-section">
           <div class="answer-label">答案：</div>
-          <div v-if="answerImages.get(currentQuestion.id)?.length" class="answer-images">
+          <div v-if="answerImages.get(currentQuestion.question_id)?.length" class="answer-images">
             <img
-              v-for="img in answerImages.get(currentQuestion.id)"
+              v-for="img in answerImages.get(currentQuestion.question_id)"
               :key="img.asset_id"
               :src="img.path"
               :alt="`答案图片`"
