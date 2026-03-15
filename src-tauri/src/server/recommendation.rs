@@ -68,6 +68,9 @@ impl<'a> RecommendationSystem<'a> {
             return Ok(DailyRecommendation { day, questions });
         }
 
+        // 清理旧推荐记录，只保留当天的
+        self.recommendation_dao.cleanup_old_recommendations(day)?;
+
         // 生成新推荐
         let questions = self.generate_recommendation(day, now, target_count)?;
 

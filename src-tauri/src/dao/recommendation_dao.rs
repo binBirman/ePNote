@@ -101,6 +101,16 @@ impl<'a> RecommendationDao<'a> {
         Ok(())
     }
 
+    /// 清理旧推荐记录，只保留当前逻辑天的记录
+    /// 每次生成新推荐时调用，确保推荐表不会无限增长
+    pub fn cleanup_old_recommendations(&self, current_day: i64) -> Result<usize, DbError> {
+        let deleted = self.conn.execute(
+            "DELETE FROM recommendation WHERE day < ?1",
+            [current_day],
+        )?;
+        Ok(deleted)
+    }
+
     /// 获取今日复习状态
     pub fn get_daily_review_status(&self) -> Result<DailyReviewStatus, DbError> {
         let now = crate::util::time::now_ts();
