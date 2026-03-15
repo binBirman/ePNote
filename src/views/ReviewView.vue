@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { getRecommendationList, getDailyReviewStatus, listSubjects } from '@/api/review'
+import { getRecommendationList, getDailyReviewStatus, listSubjects, getDailyRecommendation } from '@/api/review'
 
 const router = useRouter()
 
@@ -22,6 +22,9 @@ const reviewStatus = ref({
 onMounted(async () => {
   loading.value = true
   try {
+    // 先调用 getDailyRecommendation 生成当日推荐（如有必要）
+    await getDailyRecommendation(50)
+
     // 获取科目列表
     const subjectList = await listSubjects()
     subjects.value = ['全部', ...subjectList]

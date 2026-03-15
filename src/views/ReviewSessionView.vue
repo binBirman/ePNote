@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { getRecommendationList, processReview, listSubjects, getQuestionsByIds } from '@/api/review'
+import { getRecommendationList, processReview, listSubjects, getQuestionsByIds, getDailyRecommendation } from '@/api/review'
 import { getQuestionData, getImageBase64 } from '@/api/question'
 import type { RecommendQuestion, ReviewResult, QuestionImage } from '@/types/question'
 
@@ -54,6 +54,9 @@ onMounted(async () => {
   loading.value = true
 
   try {
+    // 先调用 getDailyRecommendation 生成当日推荐（如有必要）
+    await getDailyRecommendation(50)
+
     let result
 
     if (practiceMode.value && questionIdsParam) {
