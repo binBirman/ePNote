@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "ePNote",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "identifier": "com.epnote.app",
   "build": {
     "frontendDist": "../dist",
