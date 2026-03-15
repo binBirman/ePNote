@@ -115,6 +115,13 @@ const MIGRATIONS: &[Migration] = &[
             GROUP BY question_id;
         "#,
     },
+    Migration {
+        version: 5,
+        name: "add_subject_to_recommendation",
+        sql: r#"
+        ALTER TABLE recommendation ADD COLUMN subject TEXT;
+        "#,
+    },
 ];
 
 /*

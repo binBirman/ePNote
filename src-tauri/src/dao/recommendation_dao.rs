@@ -36,7 +36,8 @@ impl<'a> RecommendationDao<'a> {
                 q.correct_streak,
                 q.wrong_count,
                 q.last_result,
-                rs.error_rate
+                rs.error_rate,
+                r.subject
             FROM recommendation r
             JOIN question q ON r.question_id = q.id
             LEFT JOIN review_summary rs ON r.question_id = rs.question_id
@@ -57,6 +58,7 @@ impl<'a> RecommendationDao<'a> {
                 wrong_count: row.get(6)?,
                 last_result: row.get(7)?,
                 error_rate: row.get(8)?,
+                subject: row.get(9)?,
             })
         })?;
 
@@ -83,11 +85,11 @@ impl<'a> RecommendationDao<'a> {
 
         // 插入新推荐
         let mut stmt = self.conn.prepare(
-            "INSERT INTO recommendation (day, question_id, score) VALUES (?1, ?2, ?3)"
+            "INSERT INTO recommendation (day, question_id, score, subject) VALUES (?1, ?2, ?3, ?4)"
         )?;
 
         for q in questions {
-            stmt.execute(rusqlite::params![day, q.question_id, q.score])?;
+            stmt.execute(rusqlite::params![day, q.question_id, q.score, q.subject])?;
         }
 
         Ok(())
@@ -156,7 +158,8 @@ impl<'a> RecommendationDao<'a> {
                 r.question_id,
                 q.name,
                 r.result,
-                r.reviewed_at
+                r.reviewed_at,
+                rec.subject
             FROM review r
             INNER JOIN recommendation rec ON r.question_id = rec.question_id
             LEFT JOIN question q ON r.question_id = q.id
@@ -173,6 +176,7 @@ impl<'a> RecommendationDao<'a> {
                 question_name: row.get(1)?,
                 result: row.get(2)?,
                 reviewed_at: row.get(3)?,
+                subject: row.get(4)?,
             })
         })?;
 
@@ -201,7 +205,8 @@ impl<'a> RecommendationDao<'a> {
                 q.correct_streak,
                 q.wrong_count,
                 q.last_result,
-                rs.error_rate
+                rs.error_rate,
+                r.subject
             FROM recommendation r
             JOIN question q ON r.question_id = q.id
             LEFT JOIN review_summary rs ON r.question_id = rs.question_id
@@ -229,6 +234,7 @@ impl<'a> RecommendationDao<'a> {
                 wrong_count: row.get(6)?,
                 last_result: row.get(7)?,
                 error_rate: row.get(8)?,
+                subject: row.get(9)?,
             })
         })?;
 
@@ -248,4 +254,5 @@ pub struct ReviewRecord {
     pub question_name: Option<String>,
     pub result: String,
     pub reviewed_at: i64,
+    pub subject: Option<String>,
 }

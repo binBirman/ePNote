@@ -28,6 +28,7 @@ pub struct RecommendedQuestion {
     pub wrong_count: i64,
     pub last_result: Option<String>,
     pub error_rate: Option<f64>,
+    pub subject: Option<String>,  // 科目
 }
 
 /// 每日推荐结果
@@ -43,6 +44,7 @@ pub struct RecommendationSystem<'a> {
     question_dao: QuestionDao<'a>,
     review_dao: ReviewDao<'a>,
     recommendation_dao: RecommendationDao<'a>,
+    meta_dao: crate::dao::MetaDao<'a>,
 }
 
 impl<'a> RecommendationSystem<'a> {
@@ -52,6 +54,7 @@ impl<'a> RecommendationSystem<'a> {
             question_dao: QuestionDao::new(conn),
             review_dao: ReviewDao::new(conn),
             recommendation_dao: RecommendationDao::new(conn),
+            meta_dao: crate::dao::MetaDao::new(conn),
         }
     }
 
@@ -74,12 +77,12 @@ impl<'a> RecommendationSystem<'a> {
         Ok(DailyRecommendation { day, questions })
     }
 
-    /// 生成推荐列表
+    /// 生成推荐列表 - 每科10题
     fn generate_recommendation(
         &self,
         _day: i64,
         now: Timestamp,
-        target_count: i64,
+        _target_count: i64,
     ) -> Result<Vec<RecommendedQuestion>, DbError> {
         // 获取所有未删除的题目
         let all_questions = self.get_all_active_questions()?;
@@ -88,11 +91,22 @@ impl<'a> RecommendationSystem<'a> {
             return Ok(vec![]);
         }
 
-        // 为每道题计算推荐分数
+        // 科目元信息key
+        let subject_key = "system.Subject";
+
+        // 为每道题计算推荐分数并获取科目
         let mut scored_questions: Vec<RecommendedQuestion> = Vec::new();
 
         for question in all_questions {
             let score = self.calculate_score(&question, now)?;
+
+            // 获取科目
+            let subject = self.meta_dao
+                .get_by_question_key(question.id.clone(), subject_key)
+                .ok()
+                .flatten()
+                .map(|m| m.value);
+
             scored_questions.push(RecommendedQuestion {
                 question_id: i64::from(question.id),
                 name: question.name,
@@ -103,19 +117,37 @@ impl<'a> RecommendationSystem<'a> {
                 wrong_count: question.wrong_count,
                 last_result: question.last_result.map(|r| r.as_str().to_string()),
                 error_rate: None, // 稍后填充
+                subject,
             });
         }
 
         // 获取错误率
         self.enrich_error_rates(&mut scored_questions)?;
 
-        // 按分数降序排序
-        scored_questions.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        // 按科目分组，每科取10题
+        let mut subject_groups: std::collections::HashMap<String, Vec<RecommendedQuestion>> = std::collections::HashMap::new();
 
-        // 限制数量
-        scored_questions.truncate(target_count as usize);
+        for q in scored_questions {
+            let subject = q.subject.clone().unwrap_or_else(|| "未分类".to_string());
+            subject_groups.entry(subject).or_insert_with(Vec::new).push(q);
+        }
 
-        Ok(scored_questions)
+        // 每科取10题
+        let per_subject_limit = 10;
+        let mut final_questions: Vec<RecommendedQuestion> = Vec::new();
+
+        for (_, mut questions) in subject_groups {
+            // 按分数降序排序
+            questions.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+            // 取前10题
+            questions.truncate(per_subject_limit);
+            final_questions.extend(questions);
+        }
+
+        // 整体按分数排序
+        final_questions.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+
+        Ok(final_questions)
     }
 
     /// 获取所有未删除的题目

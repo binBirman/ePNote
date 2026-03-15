@@ -13,6 +13,7 @@ export interface RecommendedQuestion {
   wrong_count: number
   last_result: string | null
   error_rate: number | null
+  subject: string | null
 }
 
 export interface DailyRecommendation {
@@ -31,6 +32,7 @@ export interface ReviewRecord {
   question_name: string | null
   result: string
   reviewed_at: number
+  subject: string | null
 }
 
 /**
@@ -154,4 +156,15 @@ export interface StatsData {
  */
 export function getStats() {
   return call<StatsData>("get_stats_comm", {});
+}
+
+/**
+ * 根据题目ID列表获取题目（用于练习模式）
+ * @param questionIds 题目ID列表
+ * @returns 题目列表
+ */
+export function getQuestionsByIds(questionIds: number[]) {
+  return call<RecommendedQuestion[]>("get_questions_by_ids_comm", {
+    questionIds,
+  });
 }

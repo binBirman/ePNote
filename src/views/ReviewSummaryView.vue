@@ -9,6 +9,7 @@ interface ReviewResultItem {
   questionId: number
   questionName: string
   result: ReviewResult
+  subject: string | null
 }
 
 const router = useRouter()
@@ -16,6 +17,7 @@ const route = useRoute()
 
 const reviewResults = ref<ReviewResultItem[]>([])
 const loading = ref(false)
+const selectedSubject = ref<string>('ALL')
 
 // 从后端获取今日复习记录
 onMounted(async () => {
@@ -37,7 +39,8 @@ onMounted(async () => {
     reviewResults.value = records.map(r => ({
       questionId: r.question_id,
       questionName: r.question_name || '未命名题目',
-      result: r.result as ReviewResult
+      result: r.result as ReviewResult,
+      subject: r.subject
     }))
   } catch (e) {
     console.error('获取复习记录失败:', e)
@@ -47,12 +50,32 @@ onMounted(async () => {
   }
 })
 
+// 获取所有科目列表
+const subjects = computed(() => {
+  const subjectSet = new Set<string>()
+  reviewResults.value.forEach(r => {
+    subjectSet.add(r.subject || '未分类')
+  })
+  return Array.from(subjectSet).sort()
+})
+
+// 按科目筛选后的结果
+const filteredResults = computed(() => {
+  if (selectedSubject.value === 'ALL') {
+    return reviewResults.value
+  }
+  return reviewResults.value.filter(r =>
+    (r.subject || '未分类') === selectedSubject.value
+  )
+})
+
 // 统计计算
 const stats = computed(() => {
-  const correct = reviewResults.value.filter(r => r.result === 'CORRECT').length
-  const fuzzy = reviewResults.value.filter(r => r.result === 'FUZZY').length
-  const wrong = reviewResults.value.filter(r => r.result === 'WRONG').length
-  const total = reviewResults.value.length
+  const results = filteredResults.value
+  const correct = results.filter(r => r.result === 'CORRECT').length
+  const fuzzy = results.filter(r => r.result === 'FUZZY').length
+  const wrong = results.filter(r => r.result === 'WRONG').length
+  const total = results.length
 
   return {
     correct,
@@ -66,9 +89,9 @@ const stats = computed(() => {
 // 按结果分组
 const groupedByResult = computed(() => {
   return {
-    wrong: reviewResults.value.filter(r => r.result === 'WRONG'),
-    fuzzy: reviewResults.value.filter(r => r.result === 'FUZZY'),
-    correct: reviewResults.value.filter(r => r.result === 'CORRECT')
+    wrong: filteredResults.value.filter(r => r.result === 'WRONG'),
+    fuzzy: filteredResults.value.filter(r => r.result === 'FUZZY'),
+    correct: filteredResults.value.filter(r => r.result === 'CORRECT')
   }
 })
 
@@ -82,7 +105,7 @@ const goBack = () => {
   router.push('/review')
 }
 
-// 重新复习错题
+// 重新复习错题（练习模式，不计入记录）
 const reviewWrong = () => {
   // 提取错题ID
   const wrongIds = groupedByResult.value.wrong.map(r => r.questionId)
@@ -90,9 +113,8 @@ const reviewWrong = () => {
     router.push({
       path: '/review/session',
       query: {
-        subject: 'ALL',
-        limit: wrongIds.length.toString(),
-        reviewWrong: 'true'
+        practice: 'true',  // 练习模式，不产生复习记录
+        question_ids: wrongIds.join(',')  // 传递题目ID列表
       }
     })
   }
@@ -155,6 +177,17 @@ const getResultText = (result: ReviewResult) => {
         </div>
       </div>
 
+      <!-- 科目筛选 -->
+      <div v-if="subjects.length > 1" class="subject-filter">
+        <label for="subject-select">按科目筛选：</label>
+        <select id="subject-select" v-model="selectedSubject">
+          <option value="ALL">全部科目</option>
+          <option v-for="subject in subjects" :key="subject" :value="subject">
+            {{ subject }}
+          </option>
+        </select>
+      </div>
+
       <!-- 重新复习错题按钮 -->
       <div v-if="stats.wrong > 0" class="review-wrong-section">
         <button class="review-wrong-btn" @click="reviewWrong">
@@ -176,7 +209,10 @@ const getResultText = (result: ReviewResult) => {
               class="question-item"
               @click="goToDetail(item.questionId)"
             >
-              <span class="question-name">{{ item.questionName || '未命名题目' }}</span>
+              <span class="question-info">
+                <span v-if="item.subject" class="subject-tag">{{ item.subject }}</span>
+                <span class="question-name">{{ item.questionName || '未命名题目' }}</span>
+              </span>
               <span class="result-tag wrong">不记得</span>
             </div>
           </div>
@@ -194,7 +230,10 @@ const getResultText = (result: ReviewResult) => {
               class="question-item"
               @click="goToDetail(item.questionId)"
             >
-              <span class="question-name">{{ item.questionName || '未命名题目' }}</span>
+              <span class="question-info">
+                <span v-if="item.subject" class="subject-tag">{{ item.subject }}</span>
+                <span class="question-name">{{ item.questionName || '未命名题目' }}</span>
+              </span>
               <span class="result-tag fuzzy">模糊</span>
             </div>
           </div>
@@ -212,7 +251,10 @@ const getResultText = (result: ReviewResult) => {
               class="question-item"
               @click="goToDetail(item.questionId)"
             >
-              <span class="question-name">{{ item.questionName || '未命名题目' }}</span>
+              <span class="question-info">
+                <span v-if="item.subject" class="subject-tag">{{ item.subject }}</span>
+                <span class="question-name">{{ item.questionName || '未命名题目' }}</span>
+              </span>
               <span class="result-tag correct">记得</span>
             </div>
           </div>
@@ -277,7 +319,35 @@ const getResultText = (result: ReviewResult) => {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 16px;
+  margin-bottom: 16px;
+}
+
+/* 科目筛选 */
+.subject-filter {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
   margin-bottom: 24px;
+}
+
+.subject-filter label {
+  font-size: 14px;
+  color: #666;
+}
+
+.subject-filter select {
+  padding: 6px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #333;
+  background: #fff;
+  cursor: pointer;
+}
+
+.subject-filter select:hover {
+  border-color: #4CAF50;
 }
 
 .stat-card {
@@ -405,6 +475,22 @@ const getResultText = (result: ReviewResult) => {
 .question-item:hover {
   background: #f0f0f0;
   transform: translateX(4px);
+}
+
+.question-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.subject-tag {
+  padding: 2px 8px;
+  background-color: #e3f2fd;
+  color: #1976D2;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .question-name {

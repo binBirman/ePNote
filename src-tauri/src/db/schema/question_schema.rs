@@ -132,6 +132,52 @@ pub fn select_question_by_id(conn: &Connection, id: i64) -> Result<Option<Questi
 }
 
 /*
+    根据ID列表批量查询题目
+    输入：
+        ids: 题目ID列表
+    输出：
+        若找到，返回QuestionRow列表
+*/
+pub fn select_questions_by_ids(conn: &Connection, ids: &[i64]) -> Result<Vec<QuestionRow>, DbError> {
+    if ids.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let placeholders: Vec<String> = ids.iter().map(|_| "?".to_string()).collect();
+    let sql = format!(
+        r#"
+        SELECT id, name, state, created_at, deleted_at,
+               last_review_at, last_result, correct_streak, wrong_count, due_at
+        FROM question
+        WHERE id IN ({})
+        "#,
+        placeholders.join(", ")
+    );
+
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(rusqlite::params_from_iter(ids.iter()), |row| {
+        Ok(QuestionRow {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            state: row.get(2)?,
+            created_at: row.get(3)?,
+            deleted_at: row.get(4)?,
+            last_review_at: row.get(5)?,
+            last_result: row.get(6)?,
+            correct_streak: row.get(7)?,
+            wrong_count: row.get(8)?,
+            due_at: row.get(9)?,
+        })
+    })?;
+
+    let mut questions = Vec::new();
+    for row in rows {
+        questions.push(row?);
+    }
+    Ok(questions)
+}
+
+/*
     用名称查找题目
     输入：
         name: 题目名称，必填

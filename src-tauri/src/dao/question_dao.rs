@@ -28,6 +28,23 @@ impl<'a> QuestionDao<'a> {
         }
     }
 
+    /// 根据题目ID列表批量查询题目
+    pub fn get_by_ids(&self, ids: &[i64]) -> Result<Vec<Question>, DbError> {
+        let rows = crate::db::schema::question_schema::select_questions_by_ids(self.conn, ids)?;
+
+        let mut questions = Vec::new();
+        for row in rows {
+            // 过滤掉已删除的题目
+            if row.deleted_at.is_some() {
+                continue;
+            }
+            let q = crate::repo::question_row_to_domain(&row)
+                .map_err(|e| DbError::Migration(format!("convert error: {:?}", e)))?;
+            questions.push(q);
+        }
+        Ok(questions)
+    }
+
     /// 插入题目，返回新记录的自增 ID。
     pub fn insert(
         &self,

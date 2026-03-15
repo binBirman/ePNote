@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { getRecommendationList, processReview, listSubjects } from '@/api/review'
+import { getRecommendationList, processReview, listSubjects, getQuestionsByIds } from '@/api/review'
 import { getQuestionData, getImageBase64 } from '@/api/question'
 import type { RecommendQuestion, ReviewResult, QuestionImage } from '@/types/question'
 
@@ -34,6 +34,8 @@ const isComplete = ref(false)
 const selectedSubject = ref<string>('ALL')
 const reviewLimit = ref<number>(10)
 const loading = ref(false)
+// 练习模式（不产生复习记录）
+const practiceMode = ref(false)
 
 onMounted(async () => {
   selectedSubject.value = (route.query.subject as string) || 'ALL'
@@ -43,12 +45,26 @@ onMounted(async () => {
   if (isNaN(reviewLimit.value) || reviewLimit.value < 1) {
     reviewLimit.value = 10
   }
+  // 练习模式（不产生复习记录）
+  practiceMode.value = (route.query.practice as string) === 'true'
+
+  // 练习模式下需要获取的题目ID列表
+  const questionIdsParam = route.query.question_ids as string
 
   loading.value = true
 
   try {
-    // 使用新推荐系统获取每日推荐
-    const result = await getRecommendationList(reviewLimit.value)
+    let result
+
+    if (practiceMode.value && questionIdsParam) {
+      // 练习模式：根据题目ID列表获取题目
+      const questionIds = questionIdsParam.split(',').map(id => parseInt(id, 10)).filter(id => !isNaN(id))
+      result = await getQuestionsByIds(questionIds)
+    } else {
+      // 正常使用推荐系统获取每日推荐
+      result = await getRecommendationList(reviewLimit.value)
+    }
+
     recommendQuestionsData.value = result
 
     // 加载题目详情和图片
@@ -110,11 +126,13 @@ const handleReview = async (result: ReviewResult) => {
   const q = currentQuestion.value
   if (!q) return
 
-  // 调用后端 API 提交复习结果
-  try {
-    await processReview(q.question_id, result)
-  } catch (e) {
-    console.error('提交复习结果失败:', e)
+  // 只有非练习模式才调用后端 API 提交复习结果
+  if (!practiceMode.value) {
+    try {
+      await processReview(q.question_id, result)
+    } catch (e) {
+      console.error('提交复习结果失败:', e)
+    }
   }
 
   // 保存复习结果（包括题目名称）
