@@ -11,4 +11,5 @@ pub struct Asset {
     pub path: LogicalPath,
     pub created_at: Timestamp,
     pub deleted_at: Option<Timestamp>,
+    pub sort_order: i64,
 }

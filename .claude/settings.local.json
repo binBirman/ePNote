@@ -14,7 +14,10 @@
       "Bash(dir:*)",
       "Bash(move:*)",
       "Bash(ren \"D:\\\\chb\\\\巧思集\\\\原创源码\\\\ePNote\\\\src-tauri\\\\src\\\\server\\\\recommendation_test.rs\" \"tests\\\\recommendation_test.rs\")",
-      "Bash(cmd /c \"move D:\\\\chb\\\\巧思集\\\\原创源码\\\\ePNote\\\\src-tauri\\\\src\\\\server\\\\recommendation_test.rs D:\\\\chb\\\\巧思集\\\\原创源码\\\\ePNote\\\\src-tauri\\\\src\\\\server\\\\tests\\\\recommendation_test.rs\")"
+      "Bash(cmd /c \"move D:\\\\chb\\\\巧思集\\\\原创源码\\\\ePNote\\\\src-tauri\\\\src\\\\server\\\\recommendation_test.rs D:\\\\chb\\\\巧思集\\\\原创源码\\\\ePNote\\\\src-tauri\\\\src\\\\server\\\\tests\\\\recommendation_test.rs\")",
+      "Bash(findstr \"error\")",
+      "Bash(findstr \"error\\\\[E\")",
+      "Bash(findstr \"Compiling ePNote\")"
     ]
   }
 }

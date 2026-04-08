@@ -14,6 +14,7 @@ use crate::util::time::LogicalDay;
 pub struct QuestionImageData {
     pub path: String,
     pub asset_id: Option<String>,
+    pub sort_order: Option<i64>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -217,6 +218,7 @@ pub fn get_question_detail_comm(
                     QuestionImageData {
                         path: full_path.to_string_lossy().replace('\\', "/"),
                         asset_id: Some(a.id.0.to_string()),
+                        sort_order: Some(a.sort_order),
                     }
                 })
                 .collect();
@@ -232,6 +234,7 @@ pub fn get_question_detail_comm(
                     QuestionImageData {
                         path: full_path.to_string_lossy().replace('\\', "/"),
                         asset_id: Some(a.id.0.to_string()),
+                        sort_order: Some(a.sort_order),
                     }
                 })
                 .collect();
@@ -397,4 +400,48 @@ pub fn get_image_base64(path: String) -> Result<String, String> {
     };
 
     Ok(format!("data:{};base64,{}", mime_type, base64_str))
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct SortOrderUpdate {
+    pub asset_id: String,
+    pub sort_order: i64,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct BatchSortOrderUpdate {
+    pub question_id: i64,
+    pub type_: String, // "QUESTION" or "ANSWER"
+    pub updates: Vec<SortOrderUpdate>,
+}
+
+/// 更新图片排序（批量更新）
+#[tauri::command]
+pub fn update_image_sort_order_comm(
+    state: tauri::State<AppState>,
+    question_id: i64,
+    type_: String,
+    updates: Vec<SortOrderUpdate>,
+) -> Result<String, String> {
+    let guard = state.inner.lock().unwrap();
+    let conn = match &*guard {
+        Some(inner) => &inner.db,
+        None => return Err("App not initialized".to_string()),
+    };
+
+    // 批量更新排序 - asset_id 是 UUID 字符串，需要转换为 i64
+    let asset_orders: Vec<(i64, i64)> = updates
+        .iter()
+        .map(|u| {
+            let uuid = uuid::Uuid::parse_str(&u.asset_id)
+                .map_err(|e| format!("Invalid asset_id UUID: {}", e))?;
+            let asset_id_i64: i64 = uuid.as_u128() as i64;
+            Ok((asset_id_i64, u.sort_order))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+
+    match crate::db::batch_update_asset_sort_order(conn, question_id, &type_, asset_orders) {
+        Ok(_) => Ok(format!("Updated {} items", updates.len())),
+        Err(e) => Err(e.to_string())
+    }
 }

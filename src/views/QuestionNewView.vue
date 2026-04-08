@@ -1,8 +1,14 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { createQuestion } from '@/api/question'
+import { createQuestion, getImageBase64 } from '@/api/question'
 import { open } from "@tauri-apps/plugin-dialog";
+
+interface ImageItem {
+  path: string;
+  base64: string;
+  sortOrder: number;
+}
 
 const router = useRouter()
 
@@ -10,9 +16,13 @@ const questionName = ref('')
 const questionSubject = ref('')
 const questionKnowledgePoints = ref<string[]>([])
 const newKnowledgePoint = ref('')
-const questionQuestionImages = ref<string[]>([])
-const questionAnswerImages = ref<string[]>([])
+const questionQuestionImages = ref<ImageItem[]>([])
+const questionAnswerImages = ref<ImageItem[]>([])
 const loading = ref(false)
+
+// 大图预览
+const previewVisible = ref(false)
+const previewImage = ref('')
 
 // 添加知识点
 const addKnowledgePoint = () => {
@@ -34,6 +44,84 @@ const handleKnowledgePointKeydown = (e: KeyboardEvent) => {
     e.preventDefault()
     addKnowledgePoint()
   }
+}
+
+// 加载图片 Base64
+const loadImageBase64 = async (path: string): Promise<string> => {
+  try {
+    return await getImageBase64(path)
+  } catch {
+    return ''
+  }
+}
+
+// 将文件路径转换为 Base64 缩略图
+const loadImagePreview = async (paths: string[]): Promise<ImageItem[]> => {
+  const items: ImageItem[] = []
+  for (let i = 0; i < paths.length; i++) {
+    const base64 = await loadImageBase64(paths[i])
+    items.push({
+      path: paths[i],
+      base64,
+      sortOrder: i,
+    })
+  }
+  return items
+}
+
+// 拖拽排序 - 开始拖拽
+let draggedItem: ImageItem | null = null
+let draggedArray: 'question' | 'answer' | null = null
+
+const onDragStart = (item: ImageItem, arrayType: 'question' | 'answer') => {
+  draggedItem = item
+  draggedArray = arrayType
+}
+
+// 拖拽排序 - 拖拽中
+const onDragOver = (e: DragEvent) => {
+  e.preventDefault()
+}
+
+// 拖拽排序 - 放置
+const onDrop = (targetItem: ImageItem, arrayType: 'question' | 'answer') => {
+  if (!draggedItem || draggedArray !== arrayType) return
+
+  const array = arrayType === 'question' ? questionQuestionImages : questionAnswerImages
+  const oldIndex = array.value.findIndex(item => item.path === draggedItem!.path)
+  const newIndex = array.value.findIndex(item => item.path === targetItem.path)
+
+  if (oldIndex !== -1 && newIndex !== -1) {
+    // 移除旧位置的元素
+    const [removed] = array.value.splice(oldIndex, 1)
+    // 插入到新位置
+    array.value.splice(newIndex, 0, removed)
+    // 更新排序
+    array.value.forEach((item, index) => {
+      item.sortOrder = index
+    })
+  }
+
+  draggedItem = null
+  draggedArray = null
+}
+
+// 拖拽排序 - 拖拽结束
+const onDragEnd = () => {
+  draggedItem = null
+  draggedArray = null
+}
+
+// 预览大图
+const showPreview = (base64: string) => {
+  previewImage.value = base64
+  previewVisible.value = true
+}
+
+// 关闭预览
+const closePreview = () => {
+  previewVisible.value = false
+  previewImage.value = ''
 }
 
 const handleSubmit = async () => {
@@ -64,16 +152,16 @@ const handleSubmit = async () => {
 
   try {
     console.log('handleSubmit start')
-    console.log('question_image_paths:', questionQuestionImages.value)
-    console.log('answer_image_paths:', questionAnswerImages.value)
+    console.log('question_image_paths:', questionQuestionImages.value.map(i => i.path))
+    console.log('answer_image_paths:', questionAnswerImages.value.map(i => i.path))
     console.log('knowledge_points:', questionKnowledgePoints.value)
     loading.value = true
     await createQuestion({
       name: questionName.value,
       subject: questionSubject.value,
       knowledge_points: questionKnowledgePoints.value,
-      question_image_paths: questionQuestionImages.value,
-      answer_image_paths: questionAnswerImages.value,
+      question_image_paths: questionQuestionImages.value.map(i => i.path),
+      answer_image_paths: questionAnswerImages.value.map(i => i.path),
     })
 
     // 清空表单
@@ -119,8 +207,14 @@ const selectQuestionImages = async () => {
       // Tauri dialog 返回字符串数组或单个字符串
       const paths = Array.isArray(res) ? res : [res]
       console.log('[DEBUG] Selected question images:', paths)
+      // 加载图片预览
+      const newImages = await loadImagePreview(paths.map(p => p as string))
       // 追加到现有图片列表
-      questionQuestionImages.value = [...questionQuestionImages.value, ...paths.map(p => p as string)]
+      const startIndex = questionQuestionImages.value.length
+      newImages.forEach((img, i) => {
+        img.sortOrder = startIndex + i
+      })
+      questionQuestionImages.value = [...questionQuestionImages.value, ...newImages]
     }
   } catch (e) {
     console.error('Failed to select images:', e)
@@ -137,7 +231,14 @@ const selectAnswerImages = async () => {
     if (res) {
       const paths = Array.isArray(res) ? res : [res]
       console.log('[DEBUG] Selected answer images:', paths)
-      questionAnswerImages.value = [...questionAnswerImages.value, ...paths.map(p => p as string)]
+      // 加载图片预览
+      const newImages = await loadImagePreview(paths.map(p => p as string))
+      // 追加到现有图片列表
+      const startIndex = questionAnswerImages.value.length
+      newImages.forEach((img, i) => {
+        img.sortOrder = startIndex + i
+      })
+      questionAnswerImages.value = [...questionAnswerImages.value, ...newImages]
     }
   } catch (e) {
     console.error('Failed to select images:', e)
@@ -147,10 +248,63 @@ const selectAnswerImages = async () => {
 
 const removeQuestionImage = (index: number) => {
   questionQuestionImages.value.splice(index, 1)
+  // 更新排序
+  questionQuestionImages.value.forEach((item, i) => {
+    item.sortOrder = i
+  })
 }
 
 const removeAnswerImage = (index: number) => {
   questionAnswerImages.value.splice(index, 1)
+  // 更新排序
+  questionAnswerImages.value.forEach((item, i) => {
+    item.sortOrder = i
+  })
+}
+
+// 向上移动图片
+const moveQuestionImageUp = (index: number) => {
+  if (index <= 0) return
+  const temp = questionQuestionImages.value[index]
+  questionQuestionImages.value[index] = questionQuestionImages.value[index - 1]
+  questionQuestionImages.value[index - 1] = temp
+  // 更新排序
+  questionQuestionImages.value.forEach((item, i) => {
+    item.sortOrder = i
+  })
+}
+
+const moveQuestionImageDown = (index: number) => {
+  if (index >= questionQuestionImages.value.length - 1) return
+  const temp = questionQuestionImages.value[index]
+  questionQuestionImages.value[index] = questionQuestionImages.value[index + 1]
+  questionQuestionImages.value[index + 1] = temp
+  // 更新排序
+  questionQuestionImages.value.forEach((item, i) => {
+    item.sortOrder = i
+  })
+}
+
+const moveAnswerImageUp = (index: number) => {
+  if (index <= 0) return
+  const temp = questionAnswerImages.value[index]
+  questionAnswerImages.value[index] = questionAnswerImages.value[index - 1]
+  questionAnswerImages.value[index - 1] = temp
+  // 更新排序
+  questionAnswerImages.value.forEach((item, i) => {
+    item.sortOrder = i
+  })
+}
+
+const moveAnswerImageDown = (index: number) => {
+  if (index >= questionAnswerImages.value.length - 1) return
+  const temp = questionAnswerImages.value[index]
+  questionAnswerImages.value[index] = questionAnswerImages.value[index + 1]
+  questionAnswerImages.value[index + 1] = temp
+  // 更新排序
+  questionAnswerImages.value.forEach((item, i) => {
+    item.sortOrder = i
+  })
 }
 </script>
 
@@ -223,9 +377,25 @@ const removeAnswerImage = (index: number) => {
               <span class="upload-text">点击选择题目图片</span>
             </div>
             <div v-else class="upload-preview-list">
-              <div v-for="(img, index) in questionQuestionImages" :key="'q'+index" class="upload-preview-item">
-                <span class="preview-text">{{ img }}</span>
-                <button type="button" class="remove-btn" @click.stop="removeQuestionImage(index)">删除</button>
+              <div
+                v-for="(img, index) in questionQuestionImages"
+                :key="'q'+index"
+                class="upload-preview-item"
+                draggable="true"
+                @dragstart="onDragStart(img, 'question')"
+                @dragover="onDragOver"
+                @drop="onDrop(img, 'question')"
+                @dragend="onDragEnd"
+              >
+                <div class="drag-handle">
+                  <span class="sort-number">{{ index + 1 }}</span>
+                </div>
+                <img :src="img.base64" :alt="'题目图片 ' + (index + 1)" class="preview-thumbnail" @click="showPreview(img.base64)" />
+                <div class="preview-actions">
+                  <button type="button" class="move-btn" @click.stop="moveQuestionImageUp(index)" :disabled="index === 0" title="上移">↑</button>
+                  <button type="button" class="move-btn" @click.stop="moveQuestionImageDown(index)" :disabled="index === questionQuestionImages.length - 1" title="下移">↓</button>
+                  <button type="button" class="remove-btn" @click.stop="removeQuestionImage(index)">删除</button>
+                </div>
               </div>
               <button type="button" class="add-more-btn" @click.stop="selectQuestionImages">+ 添加更多</button>
             </div>
@@ -241,9 +411,25 @@ const removeAnswerImage = (index: number) => {
               <span class="upload-text">点击选择答案图片</span>
             </div>
             <div v-else class="upload-preview-list">
-              <div v-for="(img, index) in questionAnswerImages" :key="'a'+index" class="upload-preview-item">
-                <span class="preview-text">{{ img }}</span>
-                <button type="button" class="remove-btn" @click.stop="removeAnswerImage(index)">删除</button>
+              <div
+                v-for="(img, index) in questionAnswerImages"
+                :key="'a'+index"
+                class="upload-preview-item"
+                draggable="true"
+                @dragstart="onDragStart(img, 'answer')"
+                @dragover="onDragOver"
+                @drop="onDrop(img, 'answer')"
+                @dragend="onDragEnd"
+              >
+                <div class="drag-handle">
+                  <span class="sort-number">{{ index + 1 }}</span>
+                </div>
+                <img :src="img.base64" :alt="'答案图片 ' + (index + 1)" class="preview-thumbnail" @click="showPreview(img.base64)" />
+                <div class="preview-actions">
+                  <button type="button" class="move-btn" @click.stop="moveAnswerImageUp(index)" :disabled="index === 0" title="上移">↑</button>
+                  <button type="button" class="move-btn" @click.stop="moveAnswerImageDown(index)" :disabled="index === questionAnswerImages.length - 1" title="下移">↓</button>
+                  <button type="button" class="remove-btn" @click.stop="removeAnswerImage(index)">删除</button>
+                </div>
               </div>
               <button type="button" class="add-more-btn" @click.stop="selectAnswerImages">+ 添加更多</button>
             </div>
@@ -260,6 +446,14 @@ const removeAnswerImage = (index: number) => {
           </button>
         </div>
       </form>
+    </div>
+
+    <!-- 大图预览弹窗 -->
+    <div v-if="previewVisible" class="preview-modal" @click="closePreview">
+      <div class="preview-modal-content" @click.stop>
+        <img :src="previewImage" alt="预览大图" class="preview-modal-image" />
+        <button class="preview-modal-close" @click="closePreview">×</button>
+      </div>
     </div>
   </div>
 </template>
@@ -441,26 +635,6 @@ const removeAnswerImage = (index: number) => {
   font-size: 14px;
 }
 
-.upload-preview {
-  background-color: #fff;
-  border: 2px solid #4CAF50;
-  border-radius: 8px;
-  height: 150px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 16px;
-}
-
-.preview-text {
-  color: #333;
-  font-size: 14px;
-  text-align: center;
-  word-break: break-all;
-}
-
 .upload-preview-list {
   display: flex;
   flex-direction: column;
@@ -471,16 +645,53 @@ const removeAnswerImage = (index: number) => {
   background-color: #fff;
   border: 2px solid #4CAF50;
   border-radius: 8px;
-  padding: 12px;
+  padding: 8px;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
+  cursor: grab;
+  transition: all 0.2s;
 }
 
-.upload-preview-item .preview-text {
-  flex: 1;
-  text-align: left;
+.upload-preview-item:hover {
+  border-color: #45a049;
+  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.2);
+}
+
+.upload-preview-item:active {
+  cursor: grabbing;
+}
+
+.drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background-color: #4CAF50;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.sort-number {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.preview-thumbnail {
+  width: 120px;
+  height: 90px;
+  object-fit: cover;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid #eee;
+}
+
+.preview-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
 }
 
 .add-more-btn {
@@ -498,6 +709,26 @@ const removeAnswerImage = (index: number) => {
   border-color: #4CAF50;
   color: #4CAF50;
   background-color: #f8f8f8;
+}
+
+.move-btn {
+  padding: 6px 12px;
+  background-color: #2196F3;
+  border: none;
+  border-radius: 4px;
+  color: #ffffff;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.move-btn:hover:not(:disabled) {
+  background-color: #1976D2;
+}
+
+.move-btn:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
 }
 
 .remove-btn {
@@ -548,5 +779,48 @@ const removeAnswerImage = (index: number) => {
 
 .btn.submit:hover {
   background-color: #45a049;
+}
+
+/* 大图预览弹窗样式 */
+.preview-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.preview-modal-content {
+  position: relative;
+  max-width: 90%;
+  max-height: 90%;
+}
+
+.preview-modal-image {
+  max-width: 100%;
+  max-height: 90vh;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+.preview-modal-close {
+  position: absolute;
+  top: -40px;
+  right: 0;
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 32px;
+  cursor: pointer;
+  padding: 4px 12px;
+}
+
+.preview-modal-close:hover {
+  color: #ccc;
 }
 </style>

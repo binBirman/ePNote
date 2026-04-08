@@ -157,3 +157,7 @@ export function addQuestionImages(id: number, imagePaths: string[], imageType: s
 export function deleteQuestionImage(assetId: string) {
   return call<string>("delete_question_image_comm", { assetId });
 }
+
+export function updateImageSortOrder(questionId: number, type: string, updates: { asset_id: string; sort_order: number }[]) {
+  return call<string>("update_image_sort_order_comm", { questionId, type, updates });
+}

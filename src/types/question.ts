@@ -30,6 +30,7 @@ export interface DeleteQuestion {
 export interface QuestionImage {
   path: string;
   asset_id?: string;
+  sort_order?: number;
 }
 
 export interface QuestionInfo {

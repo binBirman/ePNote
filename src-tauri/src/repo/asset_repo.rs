@@ -19,6 +19,7 @@ pub fn row_to_domain(row: &AssetRow) -> ConvertResult<Asset> {
         path,
         created_at: Timestamp::from(row.created_at),
         deleted_at: row.deleted_at.map(Timestamp::from),
+        sort_order: row.sort_order,
     })
 }
 
@@ -30,5 +31,6 @@ pub fn domain_to_row(domain: &Asset) -> ConvertResult<AssetRow> {
         path: domain.path.as_str(),
         created_at: domain.created_at.as_i64(),
         deleted_at: domain.deleted_at.map(|t| t.as_i64()),
+        sort_order: domain.sort_order,
     })
 }

@@ -122,6 +122,31 @@ const MIGRATIONS: &[Migration] = &[
         ALTER TABLE recommendation ADD COLUMN subject TEXT;
         "#,
     },
+    Migration {
+        version: 6,
+        name: "add_asset_sort_order",
+        sql: r#"
+        ALTER TABLE asset ADD COLUMN sort_order INTEGER;
+        "#,
+    },
+    Migration {
+        version: 7,
+        name: "set_asset_sort_order_from_created_at",
+        sql: r#"
+        UPDATE asset SET sort_order = (
+            SELECT COUNT(*) FROM asset AS a
+            WHERE a.question_id = asset.question_id
+            AND a.type = asset.type
+            AND a.created_at < asset.created_at
+        ) + (
+            SELECT COUNT(*) FROM asset AS a
+            WHERE a.question_id = asset.question_id
+            AND a.type = asset.type
+            AND a.created_at = asset.created_at
+            AND a.id < asset.id
+        ) + 1;
+        "#,
+    },
 ];
 
 /*

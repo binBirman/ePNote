@@ -17,6 +17,7 @@ fn asset_row_domain_roundtrip() {
         path: "answer/1.png".to_string(),
         created_at: 1_600_000_200,
         deleted_at: None,
+        sort_order: 1,
     };
 
     let domain = asset_repo::row_to_domain(&row).expect("row_to_domain failed");
@@ -24,10 +25,12 @@ fn asset_row_domain_roundtrip() {
     assert_eq!(i64::from(domain.question_id), 1);
     assert_eq!(domain.asset_type.as_str(), "QUESTION");
     assert_eq!(domain.path.as_str(), "answer/1.png");
+    assert_eq!(domain.sort_order, 1);
 
     let row2 = asset_repo::domain_to_row(&domain).expect("domain_to_row failed");
     assert_eq!(row2.type_, "QUESTION");
     assert_eq!(row2.path, "answer/1.png");
+    assert_eq!(row2.sort_order, 1);
 }
 
 #[test]
@@ -39,6 +42,7 @@ fn asset_row_invalid_type_returns_err() {
         path: "answer/2.png".to_string(),
         created_at: 1_600_000_300,
         deleted_at: None,
+        sort_order: 1,
     };
 
     let res = asset_repo::row_to_domain(&row);
@@ -55,6 +59,7 @@ fn asset_row_invalid_path_returns_err() {
         path: "../etc/passwd".to_string(),
         created_at: 1_600_000_400,
         deleted_at: None,
+        sort_order: 1,
     };
 
     let res = asset_repo::row_to_domain(&row);
@@ -71,6 +76,7 @@ fn domain_to_row_preserves_fields() {
         path: lp,
         created_at: Timestamp::from(1_600_000_500),
         deleted_at: Some(Timestamp::from(1_600_000_600)),
+        sort_order: 2,
     };
 
     let row = asset_repo::domain_to_row(&asset).expect("domain_to_row failed");
@@ -80,4 +86,5 @@ fn domain_to_row_preserves_fields() {
     assert_eq!(row.path, asset.path.as_str());
     assert_eq!(row.created_at, asset.created_at.as_i64());
     assert_eq!(row.deleted_at, Some(asset.deleted_at.unwrap().as_i64()));
+    assert_eq!(row.sort_order, 2);
 }

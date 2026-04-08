@@ -36,6 +36,7 @@ impl<'a> AssetDao<'a> {
         type_: AssetType,
         path: PathBuf,
         created_at: Timestamp,
+        sort_order: i64,
     ) -> Result<AssetId, DbError> {
         let id = crate::db::insert_asset(
             self.conn,
@@ -43,6 +44,7 @@ impl<'a> AssetDao<'a> {
             type_.as_str(),
             &path.to_string_lossy(),
             created_at.into(),
+            sort_order,
         )?;
         Ok(AssetId::from(id))
     }
@@ -68,6 +70,13 @@ impl<'a> AssetDao<'a> {
     pub fn restore(&self, id: AssetId) -> Result<(), DbError> {
         let id_i64: i64 = i64::from(id);
         crate::db::restore_asset(self.conn, id_i64)?;
+        Ok(())
+    }
+
+    /// 更新资源排序
+    pub fn update_sort_order(&self, id: AssetId, sort_order: i64) -> Result<(), DbError> {
+        let id_i64: i64 = i64::from(id);
+        crate::db::update_asset_sort_order(self.conn, id_i64, sort_order)?;
         Ok(())
     }
 

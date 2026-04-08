@@ -11,6 +11,7 @@ pub struct AssetRow {
     pub path: String,
     pub created_at: i64,
     pub deleted_at: Option<i64>,
+    pub sort_order: i64,
 }
 /* 增加一条记录 */
 pub fn insert_asset(
@@ -19,13 +20,14 @@ pub fn insert_asset(
     type_: &str,
     path: &str,
     created_at: i64,
+    sort_order: i64,
 ) -> Result<i64, DbError> {
     conn.execute(
         r#"
-        INSERT INTO asset (question_id, type, path, created_at)
-        VALUES (?1, ?2, ?3, ?4)
+        INSERT INTO asset (question_id, type, path, created_at, sort_order)
+        VALUES (?1, ?2, ?3, ?4, ?5)
         "#,
-        (question_id, type_, path, created_at),
+        (question_id, type_, path, created_at, sort_order),
     )?;
 
     Ok(conn.last_insert_rowid())
@@ -75,7 +77,7 @@ pub fn delete_asset_physical(conn: &Connection, asset_id: i64) -> Result<(), DbE
 pub fn select_asset_by_id(conn: &Connection, id: i64) -> Result<Option<AssetRow>, DbError> {
     let mut stmt = conn.prepare(
         r#"
-        SELECT id, question_id, type, path, created_at, deleted_at
+        SELECT id, question_id, type, path, created_at, deleted_at, sort_order
         FROM asset
         WHERE id = ?1 AND deleted_at IS NULL
         "#,
@@ -89,6 +91,7 @@ pub fn select_asset_by_id(conn: &Connection, id: i64) -> Result<Option<AssetRow>
             path: row.get(3)?,
             created_at: row.get(4)?,
             deleted_at: row.get(5)?,
+            sort_order: row.get(6)?,
         })
     })?;
 
@@ -106,7 +109,7 @@ pub fn select_all_assets_by_question(
 ) -> Result<Vec<AssetRow>, DbError> {
     let mut stmt = conn.prepare(
         r#"
-        SELECT id, question_id, type, path, created_at, deleted_at
+        SELECT id, question_id, type, path, created_at, deleted_at, sort_order
         FROM asset
         WHERE question_id = ?1
         "#,
@@ -120,6 +123,7 @@ pub fn select_all_assets_by_question(
             path: row.get(3)?,
             created_at: row.get(4)?,
             deleted_at: row.get(5)?,
+            sort_order: row.get(6)?,
         })
     })?;
 
@@ -135,9 +139,10 @@ pub fn select_asset_by_question(
 ) -> Result<Vec<AssetRow>, DbError> {
     let mut stmt = conn.prepare(
         r#"
-        SELECT id, question_id, type, path, created_at, deleted_at
+        SELECT id, question_id, type, path, created_at, deleted_at, sort_order
         FROM asset
         WHERE question_id = ?1 AND deleted_at IS NULL
+        ORDER BY sort_order ASC
         "#,
     )?;
 
@@ -149,10 +154,44 @@ pub fn select_asset_by_question(
             path: row.get(3)?,
             created_at: row.get(4)?,
             deleted_at: row.get(5)?,
+            sort_order: row.get(6)?,
         })
     })?;
 
     asset_iter
         .collect::<Result<Vec<_>, _>>()
         .map_err(Into::into)
+}
+
+/* 更新资源的排序 */
+pub fn update_asset_sort_order(conn: &Connection, asset_id: i64, sort_order: i64) -> Result<(), DbError> {
+    conn.execute(
+        r#"
+        UPDATE asset
+        SET sort_order = ?1
+        WHERE id = ?2
+        "#,
+        (sort_order, asset_id),
+    )?;
+    Ok(())
+}
+
+/* 批量更新资源的排序 */
+pub fn batch_update_asset_sort_order(
+    conn: &Connection,
+    question_id: i64,
+    type_: &str,
+    asset_orders: Vec<(i64, i64)>,
+) -> Result<(), DbError> {
+    for (asset_id, sort_order) in asset_orders {
+        conn.execute(
+            r#"
+            UPDATE asset
+            SET sort_order = ?1
+            WHERE id = ?2 AND question_id = ?3 AND type = ?4
+            "#,
+            (sort_order, asset_id, question_id, type_),
+        )?;
+    }
+    Ok(())
 }

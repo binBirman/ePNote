@@ -59,20 +59,26 @@ pub fn create_question(
 
     // 3. 插入资源记录
     let ad = AssetDao::new(conn);
-    for meta in q_metas {
+    for (index, meta) in q_metas.into_iter().enumerate() {
+        let ts = Timestamp::from(meta.created_at.clone());
+        let sort_order = index as i64 + 1;
         let aid = ad.insert(
             qid.clone(),
             AssetType::QUESTION,
             meta.relative_path.clone(),
-            Timestamp::from(meta.created_at.clone()),
+            ts,
+            sort_order,
         )?;
     }
-    for meta in a_metas {
+    for (index, meta) in a_metas.into_iter().enumerate() {
+        let ts = Timestamp::from(meta.created_at.clone());
+        let sort_order = index as i64 + 1;
         let aid = ad.insert(
             qid.clone(),
             AssetType::ANSWER,
             meta.relative_path.clone(),
-            Timestamp::from(meta.created_at.clone()),
+            ts,
+            sort_order,
         )?;
     }
 
@@ -256,12 +262,15 @@ pub fn add_question_images(
     let metas = store.save_many(&srcs)?;
 
     let ad = AssetDao::new(conn);
-    for meta in metas {
+    for (index, meta) in metas.into_iter().enumerate() {
+        let ts = Timestamp::from(meta.created_at.clone());
+        let sort_order = index as i64 + 1;
         ad.insert(
             qid.clone(),
             asset_type.clone(),
             meta.relative_path.clone(),
-            Timestamp::from(meta.created_at.clone()),
+            ts,
+            sort_order,
         )?;
     }
     Ok(true)
