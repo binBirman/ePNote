@@ -76,6 +76,10 @@ fn main() {
             recommendation_c::get_daily_review_status_comm,
             recommendation_c::get_today_review_records_comm,
             recommendation_c::get_questions_by_ids_comm,
+            // 设置相关命令
+            settings_c::get_app_settings_comm,
+            settings_c::save_app_settings_comm,
+            settings_c::open_data_directory_comm,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

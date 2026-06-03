@@ -67,6 +67,12 @@ const router = createRouter({
       component: () => import('../views/RecycleBinDetailView.vue'),
       meta: { requiresInit: true }
     },
+    {
+      path: '/settings',
+      name: 'settings',
+      component: () => import('../views/SettingsView.vue'),
+      meta: { requiresInit: true }
+    },
   ],
 })
 

@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { getRecommendationList, processReview, listSubjects, getQuestionsByIds, getDailyRecommendation } from '@/api/review'
 import { getQuestionData, getImageBase64 } from '@/api/question'
+import { useSettingsStore } from '@/stores/settings'
 import type { RecommendQuestion, ReviewResult, QuestionImage } from '@/types/question'
 
 // 新推荐系统的题目类型
@@ -20,6 +21,7 @@ interface RecommendedQuestion {
 
 const router = useRouter()
 const route = useRoute()
+const settingsStore = useSettingsStore()
 
 // 推荐题目（简化数据）
 const recommendQuestionsData = ref<RecommendedQuestion[]>([])
@@ -32,18 +34,18 @@ const showAnswer = ref(false)
 const reviewResults = ref<{ questionId: number; result: ReviewResult }[]>([])
 const isComplete = ref(false)
 const selectedSubject = ref<string>('ALL')
-const reviewLimit = ref<number>(10)
+const reviewLimit = ref<number>(settingsStore.defaultReviewLimit)
 const loading = ref(false)
 // 练习模式（不产生复习记录）
 const practiceMode = ref(false)
 
 onMounted(async () => {
   selectedSubject.value = (route.query.subject as string) || 'ALL'
-  // 获取复习题数限制，默认为10
+  // 获取复习题数限制，默认使用设置中的值
   const limitParam = route.query.limit as string
-  reviewLimit.value = limitParam ? parseInt(limitParam, 10) : 10
+  reviewLimit.value = limitParam ? parseInt(limitParam, 10) : settingsStore.defaultReviewLimit
   if (isNaN(reviewLimit.value) || reviewLimit.value < 1) {
-    reviewLimit.value = 10
+    reviewLimit.value = settingsStore.defaultReviewLimit
   }
   // 练习模式（不产生复习记录）
   practiceMode.value = (route.query.practice as string) === 'true'
@@ -55,7 +57,7 @@ onMounted(async () => {
 
   try {
     // 先调用 getDailyRecommendation 生成当日推荐（如有必要）
-    await getDailyRecommendation(50)
+    await getDailyRecommendation(settingsStore.dailyRecommendationLimit)
 
     let result
 

@@ -8,6 +8,10 @@ const menuItems = [
   { path: '/questions', label: '题目' },
   { path: '/stats', label: '统计' }
 ]
+
+const bottomItems = [
+  { path: '/settings', label: '设置' }
+]
 </script>
 
 <template>
@@ -24,6 +28,17 @@ const menuItems = [
         {{ item.label }}
       </RouterLink>
     </nav>
+    <div class="sidebar-bottom">
+      <RouterLink
+        v-for="item in bottomItems"
+        :key="item.path"
+        :to="item.path"
+        class="nav-item"
+        :class="{ active: route.path.startsWith(item.path) }"
+      >
+        {{ item.label }}
+      </RouterLink>
+    </div>
   </aside>
 </template>
 
@@ -53,6 +68,12 @@ const menuItems = [
 .sidebar-nav {
   flex: 1;
   padding-top: 20px;
+}
+
+.sidebar-bottom {
+  padding-bottom: 12px;
+  border-top: 1px solid #e0e0e0;
+  padding-top: 8px;
 }
 
 .nav-item {

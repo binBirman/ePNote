@@ -6,6 +6,7 @@ pub mod instance;
 pub mod types;
 
 pub use appstate::*;
+pub use config::{default_settings, AppSettings};
 pub use error::*;
 pub use init::{init_note, tauri_check_init_default, tauri_init_note};
 pub use instance::init_dataroot;

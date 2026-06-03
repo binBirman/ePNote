@@ -20,7 +20,9 @@
       "Bash(findstr \"Compiling ePNote\")",
       "Bash(git add -A)",
       "Bash(cargo clean:*)",
-      "Bash(Select-Object:*)"
+      "Bash(Select-Object:*)",
+      "Bash(npx vue-tsc:*)",
+      "Bash(npx vite:*)"
     ]
   }
 }

@@ -7,9 +7,11 @@ import App from './App.vue'
 import router from './router'
 import { setInitialized } from './mock/data'
 import { tauri_check_init_default } from './api/init'
+import { useSettingsStore } from './stores/settings'
 
 const app = createApp(App);
-app.use(createPinia());
+const pinia = createPinia();
+app.use(pinia);
 app.use(router);
 app.mount('#app');
 
@@ -18,6 +20,9 @@ app.mount('#app');
   const status = await tauri_check_init_default()
   setInitialized(status.initialized, status.root)
   if (status.initialized) {
+    // 加载设置
+    const settingsStore = useSettingsStore()
+    await settingsStore.loadSettings()
     router.push('/review')
   } else {
     router.push('/init')

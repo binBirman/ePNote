@@ -95,12 +95,12 @@ impl<'a> RecommendationSystem<'a> {
         Ok(DailyRecommendation { day, questions })
     }
 
-    /// 生成推荐列表 - 每科10题
+    /// 生成推荐列表，按科目均分 target_count 条
     fn generate_recommendation(
         &self,
         _day: i64,
         now: Timestamp,
-        _target_count: i64,
+        target_count: i64,
     ) -> Result<Vec<RecommendedQuestion>, DbError> {
         // 获取所有未删除的题目
         let all_questions = self.get_all_active_questions()?;
@@ -184,8 +184,9 @@ impl<'a> RecommendationSystem<'a> {
             subject_groups.entry(subject).or_insert_with(Vec::new).push(q);
         }
 
-        // 每科取10题
-        let per_subject_limit = 10;
+        // 按科目数均分 target_count，每科至少取 1 题
+        let num_subjects = subject_groups.len().max(1);
+        let per_subject_limit = ((target_count as usize) / num_subjects).max(1);
         let mut final_questions: Vec<RecommendedQuestion> = Vec::new();
 
         for (_, mut questions) in subject_groups {

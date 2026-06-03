@@ -2,15 +2,17 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getRecommendationList, getDailyReviewStatus, listSubjects, getDailyRecommendation } from '@/api/review'
+import { useSettingsStore } from '@/stores/settings'
 
 const router = useRouter()
+const settingsStore = useSettingsStore()
 
 const subjects = ref<string[]>([])
 const selectedSubject = ref<string>('ALL')
 const pendingQuestions = ref<any[]>([])
 const loading = ref(false)
-const reviewLimit = ref<number>(10) // 默认复习10题
-const maxLimit = ref<number>(50) // 最大限制
+const reviewLimit = ref<number>(settingsStore.defaultReviewLimit)
+const maxLimit = ref<number>(settingsStore.dailyRecommendationLimit)
 
 // 每日复习状态
 const reviewStatus = ref({
@@ -23,7 +25,7 @@ onMounted(async () => {
   loading.value = true
   try {
     // 先调用 getDailyRecommendation 生成当日推荐（如有必要）
-    await getDailyRecommendation(50)
+    await getDailyRecommendation(settingsStore.dailyRecommendationLimit)
 
     // 获取科目列表
     const subjectList = await listSubjects()

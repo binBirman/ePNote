@@ -1,6 +1,7 @@
 //! 推荐系统命令层
 
 use crate::app::appstate::AppState;
+use crate::app::config;
 use crate::dao::meta_dao::MetaDao;
 use crate::dao::question_dao::QuestionDao;
 use crate::dao::recommendation_dao::{DailyReviewStatus, RecommendationDao, ReviewRecord};
@@ -19,7 +20,9 @@ pub fn get_daily_recommendation_comm(
         None => return Err("App not initialized".to_string()),
     };
     let rs = RecommendationSystem::new(conn);
-    rs.get_daily_recommendation(target_count.unwrap_or(10)).map_err(|e| e.to_string())
+    let settings = config::load_settings();
+    let default_target = settings.daily_recommendation_limit as i64;
+    rs.get_daily_recommendation(target_count.unwrap_or(default_target)).map_err(|e| e.to_string())
 }
 
 /// 获取推荐题目列表（用于复习会话）- 只返回未复习的题目
@@ -34,7 +37,9 @@ pub fn get_recommendation_list_comm(
         None => return Err("App not initialized".to_string()),
     };
     let dao = RecommendationDao::new(conn);
-    dao.get_pending_recommendations(limit.unwrap_or(10)).map_err(|e| e.to_string())
+    let settings = config::load_settings();
+    let default_limit = settings.default_review_limit as i64;
+    dao.get_pending_recommendations(limit.unwrap_or(default_limit)).map_err(|e| e.to_string())
 }
 
 /// 获取今日复习状态
