@@ -18,7 +18,9 @@
       "Bash(findstr \"error\")",
       "Bash(findstr \"error\\\\[E\")",
       "Bash(findstr \"Compiling ePNote\")",
-      "Bash(git add -A)"
+      "Bash(git add -A)",
+      "Bash(cargo clean:*)",
+      "Bash(Select-Object:*)"
     ]
   }
 }

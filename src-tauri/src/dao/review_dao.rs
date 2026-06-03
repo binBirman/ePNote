@@ -89,23 +89,24 @@ impl<'a> ReviewDao<'a> {
         Ok(ReviewId::from(id))
     }
 
-    /// 获取所有题目的错误率（从 review_summary 视图）
-    pub fn get_all_error_rates(&self) -> Result<std::collections::HashMap<i64, f64>, DbError> {
+    /// 获取所有题目的错误率和复习次数（从 review_summary 视图）
+    /// 返回 HashMap<question_id, (error_rate, review_count)>
+    pub fn get_all_error_rates(&self) -> Result<std::collections::HashMap<i64, (f64, i64)>, DbError> {
         let mut stmt = self.conn.prepare(
             r#"
-            SELECT question_id, error_rate
+            SELECT question_id, error_rate, review_count
             FROM review_summary
             "#
         )?;
 
         let rows = stmt.query_map([], |row| {
-            Ok((row.get::<_, i64>(0)?, row.get::<_, f64>(1)?))
+            Ok((row.get::<_, i64>(0)?, row.get::<_, f64>(1)?, row.get::<_, i64>(2)?))
         })?;
 
         let mut map = std::collections::HashMap::new();
         for row in rows {
-            let (qid, rate) = row?;
-            map.insert(qid, rate);
+            let (qid, rate, count) = row?;
+            map.insert(qid, (rate, count));
         }
 
         Ok(map)

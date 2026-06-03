@@ -108,14 +108,16 @@ pub fn get_questions_by_ids_comm(
             last_result: q.last_result.map(|r| r.as_str().to_string()),
             error_rate: None,
             subject,
+            reason: None,
+            score_detail: None,
         });
     }
 
     // 填充错误率
     let error_rates = review_dao.get_all_error_rates().map_err(|e| e.to_string())?;
     for q in result.iter_mut() {
-        if let Some(rate) = error_rates.get(&q.question_id) {
-            q.error_rate = Some(*rate);
+        if let Some(&(error_rate, _)) = error_rates.get(&q.question_id) {
+            q.error_rate = Some(error_rate);
         }
     }
 

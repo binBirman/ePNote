@@ -16,6 +16,17 @@ use serde::Serialize;
 /// 一天对应的秒数
 const DAY_SECONDS: i64 = 24 * 60 * 60;
 
+/// 评分明细（调试用）
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct ScoreDetail {
+    pub forget_risk: f64,
+    pub freshness_bonus: f64,
+    pub last_wrong_bonus: f64,
+    pub error_rate_bonus: f64,
+    pub randomness: f64,
+    pub final_score: f64,
+}
+
 /// 推荐结果项
 #[derive(Debug, Clone, Serialize)]
 pub struct RecommendedQuestion {
@@ -28,7 +39,11 @@ pub struct RecommendedQuestion {
     pub wrong_count: i64,
     pub last_result: Option<String>,
     pub error_rate: Option<f64>,
-    pub subject: Option<String>,  // 科目
+    pub subject: Option<String>,       // 科目
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<Vec<String>>,   // 推荐理由
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub score_detail: Option<ScoreDetail>, // 评分明细（仅 debug 构建填充）
 }
 
 /// 每日推荐结果
@@ -94,6 +109,9 @@ impl<'a> RecommendationSystem<'a> {
             return Ok(vec![]);
         }
 
+        // 获取所有题目的复习摘要（错误率 + 复习次数）
+        let review_summaries = self.review_dao.get_all_error_rates()?;
+
         // 科目元信息key
         let subject_key = "system.Subject";
 
@@ -101,7 +119,32 @@ impl<'a> RecommendationSystem<'a> {
         let mut scored_questions: Vec<RecommendedQuestion> = Vec::new();
 
         for question in all_questions {
-            let score = self.calculate_score(&question, now)?;
+            let qid = i64::from(question.id.clone());
+
+            // 从摘要中获取 review_count 和 error_rate
+            let (review_count, error_rate) = review_summaries
+                .get(&qid)
+                .map(|&(err_rate, cnt)| (cnt, Some(err_rate)))
+                .unwrap_or((0, None));
+
+            let detail = self.calculate_score(&question, now, review_count, error_rate);
+
+            // 计算超期天数
+            let overdue_days = question.due_at
+                .map(|d| ((now.as_i64() - d.as_i64()) as f64 / DAY_SECONDS as f64).max(0.0))
+                .unwrap_or(0.0);
+
+            // 提取 last_result 字符串
+            let last_result_str = question.last_result.map(|r| r.as_str().to_string());
+
+            // 生成推荐理由
+            let reason = Self::generate_reason(
+                review_count,
+                detail.forget_risk,
+                overdue_days,
+                &last_result_str,
+                error_rate,
+            );
 
             // 获取科目
             let subject = self.meta_dao
@@ -110,22 +153,28 @@ impl<'a> RecommendationSystem<'a> {
                 .flatten()
                 .map(|m| m.value);
 
+            // 仅 debug 构建填充评分明细
+            let score_detail = if cfg!(debug_assertions) {
+                Some(detail)
+            } else {
+                None
+            };
+
             scored_questions.push(RecommendedQuestion {
-                question_id: i64::from(question.id),
+                question_id: qid,
                 name: question.name,
-                score,
+                score: detail.final_score,
                 state: question.state.as_str().to_string(),
                 due_at: question.due_at.map(|t| t.as_i64()),
                 correct_streak: question.correct_streak,
                 wrong_count: question.wrong_count,
-                last_result: question.last_result.map(|r| r.as_str().to_string()),
-                error_rate: None, // 稍后填充
+                last_result: last_result_str,
+                error_rate,
                 subject,
+                reason,
+                score_detail,
             });
         }
-
-        // 获取错误率
-        self.enrich_error_rates(&mut scored_questions)?;
 
         // 按科目分组，每科取10题
         let mut subject_groups: std::collections::HashMap<String, Vec<RecommendedQuestion>> = std::collections::HashMap::new();
@@ -170,81 +219,102 @@ impl<'a> RecommendationSystem<'a> {
     }
 
     /// 计算推荐分数
-    /// score = overdue_score * last_wrong_bonus * new_question_bonus * error_rate_bonus * randomness
-    fn calculate_score(&self, question: &Question, now: Timestamp) -> Result<f64, DbError> {
-        let stability = (question.correct_streak + 1) as f64;
-        let difficulty = 1.0 + (question.wrong_count as f64) * 0.2;
-
-        // 1. 过期分数
-        let overdue_score = if let Some(due_at) = question.due_at {
-            let overdue_days = ((now.as_i64() - due_at.as_i64()) as f64 / DAY_SECONDS as f64).max(0.0);
-            if overdue_days > 0.0 {
-                overdue_days * 10.0
-            } else {
-                0.0
+    /// score = (1 + forget_risk) * freshness_bonus * last_wrong_bonus * error_rate_bonus * randomness
+    fn calculate_score(
+        &self,
+        question: &Question,
+        now: Timestamp,
+        review_count: i64,
+        error_rate: Option<f64>,
+    ) -> ScoreDetail {
+        // 1. 遗忘风险 (软对数上限)
+        let forget_risk = match (question.last_review_at, question.due_at) {
+            (Some(last_review), Some(due)) => {
+                let expected = ((due.as_i64() - last_review.as_i64()) as f64 / DAY_SECONDS as f64).max(1.0);
+                let passed = ((now.as_i64() - last_review.as_i64()) as f64 / DAY_SECONDS as f64).max(0.0);
+                (passed / expected + 1.0).log2()
             }
-        } else {
-            // 从未复习过，视为过期
-            10.0
+            _ => 0.0, // 从未复习过的题，遗忘风险为 0
         };
 
-        // 2. 最近错误奖励 (last_result = WRONG)
+        // 2. 新鲜度奖励 (仅从未复习过的新题)
+        let freshness_bonus = if review_count == 0 {
+            let days = ((now.as_i64() - question.created_at.as_i64()) as f64 / DAY_SECONDS as f64).max(0.0);
+            (5.0 - days * 0.25).max(1.0)
+        } else {
+            1.0
+        };
+
+        // 3. 上次错误奖励
         let last_wrong_bonus = if let Some(ReviewResult::WRONG) = question.last_result {
-            5.0
+            3.0
         } else {
             1.0
         };
 
-        // 3. 新题奖励 (从未复习过)
-        let new_question_bonus = if question.last_review_at.is_none() {
-            2.0
-        } else {
-            1.0
+        // 4. 错误率奖励 (带样本量平滑)
+        let error_rate_bonus = match error_rate {
+            Some(rate) => 1.0 + rate * ((review_count + 1) as f64).log2(),
+            None => 1.0,
         };
 
-        // 4. 错误率奖励 (从 review_summary 获取)
-        let error_rate_bonus = 1.0; // 默认值，稍后通过 enrich_error_rates 填充
-
-        // 5. 随机扰动 (每天略有不同)
+        // 5. 随机扰动
         let qid_i64: i64 = question.id.clone().into();
         let day_seed = (qid_i64 * 31 + now.as_i64() / DAY_SECONDS) % 1000;
-        let randomness = 0.9 + (day_seed as f64 / 5000.0); // 0.9 ~ 1.1
+        let randomness = 0.95 + (day_seed as f64 / 10000.0); // 0.95 ~ 1.05
 
         // 计算总分
-        let score = (1.0 + overdue_score)
+        let final_score = (1.0 + forget_risk)
+            * freshness_bonus
             * last_wrong_bonus
-            * new_question_bonus
             * error_rate_bonus
             * randomness;
 
-        Ok(score)
+        ScoreDetail {
+            forget_risk,
+            freshness_bonus,
+            last_wrong_bonus,
+            error_rate_bonus,
+            randomness,
+            final_score,
+        }
     }
 
-    /// 填充错误率信息
-    fn enrich_error_rates(&self, questions: &mut Vec<RecommendedQuestion>) -> Result<(), DbError> {
-        // 获取所有题目的错误率
-        let error_rates = self.review_dao.get_all_error_rates()?;
+    /// 生成推荐理由，按固定优先级排序
+    fn generate_reason(
+        review_count: i64,
+        forget_risk: f64,
+        overdue_days: f64,
+        last_result: &Option<String>,
+        error_rate: Option<f64>,
+    ) -> Option<Vec<String>> {
+        let mut reasons: Vec<(u8, String)> = Vec::new();
 
-        for q in questions.iter_mut() {
-            if let Some(rate) = error_rates.get(&q.question_id) {
-                q.error_rate = Some(*rate);
+        if review_count == 0 {
+            reasons.push((1, "新加入题目".to_string()));
+        }
+        if forget_risk >= 1.0 && overdue_days >= 0.0 {
+            reasons.push((2, "已到复习时间".to_string()));
+        }
+        if overdue_days > 0.0 {
+            reasons.push((3, format!("已超期{}天", overdue_days as i64)));
+        }
+        if let Some(r) = last_result {
+            if r == "wrong" {
+                reasons.push((4, "上次回答错误".to_string()));
+            }
+        }
+        if let Some(rate) = error_rate {
+            if rate >= 0.5 {
+                reasons.push((5, format!("错误率{:.0}%", rate * 100.0)));
             }
         }
 
-        // 重新计算带有错误率的分数
-        for q in questions.iter_mut() {
-            let error_rate_bonus = if let Some(rate) = q.error_rate {
-                // 错误率越高，奖励越高
-                1.0 + rate * 2.0
-            } else {
-                1.0
-            };
-
-            // 重新计算 (简化处理)
-            q.score = q.score * error_rate_bonus;
+        if reasons.is_empty() {
+            return None;
         }
-
-        Ok(())
+        reasons.sort_by_key(|(priority, _)| *priority);
+        Some(reasons.into_iter().map(|(_, text)| text).collect())
     }
 
     /// 处理复习结果 - 更新题目复习状态

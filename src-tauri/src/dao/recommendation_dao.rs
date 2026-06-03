@@ -59,6 +59,8 @@ impl<'a> RecommendationDao<'a> {
                 last_result: row.get(7)?,
                 error_rate: row.get(8)?,
                 subject: row.get(9)?,
+                reason: None,
+                score_detail: None,
             })
         })?;
 
@@ -245,6 +247,8 @@ impl<'a> RecommendationDao<'a> {
                 last_result: row.get(7)?,
                 error_rate: row.get(8)?,
                 subject: row.get(9)?,
+                reason: None,
+                score_detail: None,
             })
         })?;
 
