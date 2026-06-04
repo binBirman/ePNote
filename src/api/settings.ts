@@ -10,6 +10,7 @@ export interface AppSettings {
   per_subject_daily_limit: number;
   subjects: Record<string, SubjectConfig>;
   new_question_ratio: number;
+  new_question_guarantee_ratio: number;
   recommendation_randomness: number;
   show_debug_info: boolean;
 }

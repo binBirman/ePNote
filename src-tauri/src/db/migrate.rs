@@ -154,6 +154,21 @@ const MIGRATIONS: &[Migration] = &[
         ALTER TABLE recommendation ADD COLUMN reason TEXT;
         "#,
     },
+    Migration {
+        version: 9,
+        name: "fix_review_summary_case_sensitivity",
+        sql: r#"
+        DROP VIEW IF EXISTS review_summary;
+        CREATE VIEW review_summary AS
+            SELECT
+                question_id,
+                COUNT(*) AS review_count,
+                MAX(reviewed_at) AS last_reviewed_at,
+                SUM(CASE WHEN LOWER(result) != 'correct' THEN 1 ELSE 0 END) * 1.0 / COUNT(*) AS error_rate
+            FROM review
+            GROUP BY question_id;
+        "#,
+    },
 ];
 
 /*

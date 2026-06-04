@@ -9,6 +9,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const defaultReviewLimit = ref<number>(10)
   const perSubjectDailyLimit = ref<number>(10)
   const newQuestionRatio = ref<number>(0.3)
+  const newQuestionGuaranteeRatio = ref<number>(0.2)
   const recommendationRandomness = ref<number>(1.0)
   const showDebugInfo = ref<boolean>(false)
 
@@ -34,6 +35,7 @@ export const useSettingsStore = defineStore('settings', () => {
       defaultReviewLimit.value = s.default_review_limit ?? 10
       perSubjectDailyLimit.value = s.per_subject_daily_limit ?? 10
       newQuestionRatio.value = s.new_question_ratio ?? 0.3
+      newQuestionGuaranteeRatio.value = s.new_question_guarantee_ratio ?? 0.2
       recommendationRandomness.value = s.recommendation_randomness ?? 1.0
       showDebugInfo.value = s.show_debug_info ?? false
       subjectConfigs.value = s.subjects || {}
@@ -50,6 +52,7 @@ export const useSettingsStore = defineStore('settings', () => {
       default_review_limit: defaultReviewLimit.value,
       per_subject_daily_limit: perSubjectDailyLimit.value,
       new_question_ratio: newQuestionRatio.value,
+      new_question_guarantee_ratio: newQuestionGuaranteeRatio.value,
       recommendation_randomness: recommendationRandomness.value,
       show_debug_info: showDebugInfo.value,
       subjects: subjectConfigs.value,
@@ -84,6 +87,7 @@ export const useSettingsStore = defineStore('settings', () => {
     defaultReviewLimit,
     perSubjectDailyLimit,
     newQuestionRatio,
+    newQuestionGuaranteeRatio,
     recommendationRandomness,
     showDebugInfo,
     developerMode,

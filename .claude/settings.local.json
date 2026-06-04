@@ -24,7 +24,9 @@
       "Bash(npx vue-tsc:*)",
       "Bash(npx vite:*)",
       "Bash(npx tauri build)",
-      "Bash(npx tauri build:*)"
+      "Bash(npx tauri build:*)",
+      "Bash(findstr:*)",
+      "Bash(Select-String:*)"
     ]
   }
 }

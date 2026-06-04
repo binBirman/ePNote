@@ -94,23 +94,22 @@ async function copyDataPath() {
         </div>
       </div>
 
-      <!-- 新题推荐比例（预留） -->
-      <div class="setting-row disabled">
+      <!-- 新题保送比例 -->
+      <div class="setting-row">
         <div class="setting-info">
-          <span class="setting-label">新题推荐比例</span>
-          <span class="setting-desc">推荐中新题所占的比例（后续开放）</span>
+          <span class="setting-label">新题保送比例</span>
+          <span class="setting-desc">每天至少保证多少比例的名额给从未复习过的新题</span>
         </div>
         <div class="setting-control">
           <input
-            v-model.number="store.newQuestionRatio"
+            v-model.number="store.newQuestionGuaranteeRatio"
             type="range"
             class="slider-input"
             min="0"
             max="1"
-            step="0.1"
-            disabled
+            step="0.05"
           />
-          <span class="slider-value disabled-text">{{ store.newQuestionRatio.toFixed(1) }}</span>
+          <span class="slider-value">{{ (store.newQuestionGuaranteeRatio * 100).toFixed(0) }}%</span>
         </div>
       </div>
 

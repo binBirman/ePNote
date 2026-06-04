@@ -33,9 +33,12 @@ pub struct AppSettings {
     /// 每科每日推荐默认题数
     #[serde(default = "default_per_subject_daily_limit")]
     pub per_subject_daily_limit: u32,
-    /// 新题推荐比例（预留）
+    /// 新题推荐比例（已废弃，使用 new_question_guarantee_ratio 替代）
     #[serde(default = "default_new_question_ratio")]
     pub new_question_ratio: f64,
+    /// 新题保送比例（0~1），每日推荐中至少保证该比例名额给新题
+    #[serde(default = "default_new_question_guarantee_ratio")]
+    pub new_question_guarantee_ratio: f64,
     /// 推荐随机性系数
     #[serde(default = "default_recommendation_randomness")]
     pub recommendation_randomness: f64,
@@ -50,6 +53,7 @@ pub struct AppSettings {
 fn default_review_limit() -> u32 { 10 }
 fn default_per_subject_daily_limit() -> u32 { 10 }
 fn default_new_question_ratio() -> f64 { 0.3 }
+fn default_new_question_guarantee_ratio() -> f64 { 0.2 }
 fn default_recommendation_randomness() -> f64 { 1.0 }
 fn default_show_debug_info() -> bool { false }
 
@@ -59,6 +63,7 @@ impl Default for AppSettings {
             default_review_limit: default_review_limit(),
             per_subject_daily_limit: default_per_subject_daily_limit(),
             new_question_ratio: default_new_question_ratio(),
+            new_question_guarantee_ratio: default_new_question_guarantee_ratio(),
             recommendation_randomness: default_recommendation_randomness(),
             show_debug_info: default_show_debug_info(),
             subjects: HashMap::new(),

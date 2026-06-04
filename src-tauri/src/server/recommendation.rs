@@ -42,11 +42,17 @@ pub struct RecommendedQuestion {
     pub wrong_count: i64,
     pub last_result: Option<String>,
     pub error_rate: Option<f64>,
-    pub subject: Option<String>,       // 科目
+    pub subject: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub reason: Option<Vec<String>>,   // 推荐理由
+    pub reason: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub score_detail: Option<ScoreDetail>, // 评分明细（仅 debug 构建填充）
+    pub score_detail: Option<ScoreDetail>,
+    /// 复习次数（内部使用，不序列化）
+    #[serde(skip)]
+    pub review_count: i64,
+    /// 创建时间戳（内部使用，不序列化）
+    #[serde(skip)]
+    pub created_at: i64,
 }
 
 /// 每日推荐结果
@@ -107,6 +113,7 @@ impl<'a> RecommendationSystem<'a> {
         &self,
         subject_configs: &HashMap<String, SubjectConfig>,
         per_subject_default_limit: u32,
+        new_question_guarantee_ratio: f64,
     ) -> Result<DailyRecommendation, DbError> {
         let now = now_ts();
         let day = LogicalDay::from(now).0 as i64;
@@ -120,7 +127,7 @@ impl<'a> RecommendationSystem<'a> {
         self.recommendation_dao.cleanup_old_recommendations(day)?;
 
         // 生成新推荐
-        let questions = self.generate_recommendation(now, subject_configs, per_subject_default_limit)?;
+        let questions = self.generate_recommendation(now, subject_configs, per_subject_default_limit, new_question_guarantee_ratio)?;
 
         // 保存到数据库
         self.recommendation_dao.insert_batch(day, &questions)?;
@@ -135,6 +142,7 @@ impl<'a> RecommendationSystem<'a> {
         show_exclusion_reason: bool,
         subject_configs: &HashMap<String, SubjectConfig>,
         per_subject_default_limit: u32,
+        new_question_guarantee_ratio: f64,
     ) -> Result<Vec<PreviewRecommendationItem>, DbError> {
         let now = now_ts();
         let all_questions = self.get_all_active_questions()?;
@@ -198,6 +206,8 @@ impl<'a> RecommendationSystem<'a> {
                 subject,
                 reason,
                 score_detail,
+                review_count,
+                created_at: question.created_at.as_i64(),
             });
         }
 
@@ -208,10 +218,10 @@ impl<'a> RecommendationSystem<'a> {
             subject_groups.entry(subject).or_default().push(q);
         }
 
-        // Step 3: 每组内标记入选/落选
+        // Step 3: 每组内使用分池逻辑标记入选/落选
         let mut results: Vec<PreviewRecommendationItem> = Vec::new();
 
-        for (subject, mut group) in subject_groups {
+        for (subject, questions) in subject_groups {
             let (archived, limit) = if subject == "未分类" {
                 (false, per_subject_default_limit as usize)
             } else {
@@ -231,18 +241,94 @@ impl<'a> RecommendationSystem<'a> {
                 }
             };
 
-            group.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
-            let total = group.len();
-
-            for (rank, q) in group.into_iter().enumerate() {
-                let rank_1 = rank + 1; // 1-based
-                let selected = !archived && rank < limit;
-
-                let exclusion_reason: Vec<String> = if show_exclusion_reason && !selected {
-                    if archived {
+            if archived {
+                // 已归档科目：全部标记为落选
+                for q in questions {
+                    let exclusion_reason: Vec<String> = if show_exclusion_reason {
                         vec!["科目已归档".to_string()]
                     } else {
-                        vec![format!("同科排名第{}/{}，分数低于入选线", rank_1, total)]
+                        vec![]
+                    };
+                    results.push(PreviewRecommendationItem {
+                        question_id: q.question_id,
+                        name: q.name.unwrap_or_default(),
+                        subject: q.subject,
+                        score: q.score,
+                        selected: false,
+                        reason: q.reason.unwrap_or_default(),
+                        exclusion_reason,
+                        score_detail: q.score_detail,
+                        subject_rank: 0,
+                        subject_limit: 0,
+                    });
+                }
+                continue;
+            }
+
+            // 分池
+            let (mut new_questions, other_questions): (Vec<_>, Vec<_>) =
+                questions.into_iter().partition(|q| q.review_count == 0);
+
+            let guarantee = (limit as f64 * new_question_guarantee_ratio).ceil() as usize;
+
+            // Pool A: new questions sorted by created_at ascending
+            new_questions.sort_by_key(|q| q.created_at);
+            let take_new_count = new_questions.len().min(guarantee);
+
+            // Consume new_questions into pool_a items and remaining
+            let mut new_iter = new_questions.into_iter();
+            let mut new_rank = 0usize;
+            // Phase A: push pool A selected items as results
+            for _ in 0..take_new_count {
+                new_rank += 1;
+                if let Some(q) = new_iter.next() {
+                    results.push(PreviewRecommendationItem {
+                        question_id: q.question_id,
+                        name: q.name.unwrap_or_default(),
+                        subject: q.subject,
+                        score: q.score,
+                        selected: true,
+                        reason: vec!["新题保送".to_string()],
+                        exclusion_reason: vec![],
+                        score_detail: q.score_detail,
+                        subject_rank: new_rank,
+                        subject_limit: take_new_count,
+                    });
+                }
+            }
+
+            // Pool B: pool A rejected new questions + other questions
+            let mut pool_b: Vec<RecommendedQuestion> = new_iter.collect();
+            pool_b.extend(other_questions);
+            pool_b.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+            let pool_b_limit = limit - take_new_count;
+
+            // Collect pool B selected question_ids
+            let pool_b_selected_ids: std::collections::HashSet<i64> = pool_b
+                .iter()
+                .take(pool_b_limit)
+                .map(|q| q.question_id)
+                .collect();
+
+            // Build preview items: pass through pool_b in score-sorted order for rank
+            let total = pool_b.len();
+            let mut b_rank = 0usize;
+            for q in pool_b {
+                b_rank += 1;
+                // pool B items can never be pool A selected (those were consumed above),
+                // but new questions in pool B might have been pool A rejects
+                let selected = pool_b_selected_ids.contains(&q.question_id);
+
+                let reason: Vec<String> = q.reason.unwrap_or_default();
+
+                let exclusion_reason: Vec<String> = if !selected && show_exclusion_reason {
+                    if q.review_count == 0 {
+                        vec!["新题保送名额已满，评分未达到入选线".to_string()]
+                    } else {
+                        vec![format!(
+                            "同科排名第{}/{}，分数低于入选线",
+                            b_rank, total
+                        )]
                     }
                 } else {
                     vec![]
@@ -254,11 +340,11 @@ impl<'a> RecommendationSystem<'a> {
                     subject: q.subject,
                     score: q.score,
                     selected,
-                    reason: q.reason.unwrap_or_default(),
+                    reason,
                     exclusion_reason,
                     score_detail: q.score_detail,
-                    subject_rank: rank_1,
-                    subject_limit: if archived { 0 } else { limit },
+                    subject_rank: b_rank,
+                    subject_limit: limit,
                 });
             }
         }
@@ -342,12 +428,13 @@ impl<'a> RecommendationSystem<'a> {
         })
     }
 
-    /// 生成推荐列表，按科目配置控制每科题数
+    /// 生成推荐列表，使用分池算法：池A（新题保送）+ 池B（评分竞争）
     fn generate_recommendation(
         &self,
         now: Timestamp,
         subject_configs: &HashMap<String, SubjectConfig>,
         per_subject_default_limit: u32,
+        new_question_guarantee_ratio: f64,
     ) -> Result<Vec<RecommendedQuestion>, DbError> {
         // 获取所有未删除的题目
         let all_questions = self.get_all_active_questions()?;
@@ -420,6 +507,8 @@ impl<'a> RecommendationSystem<'a> {
                 subject,
                 reason,
                 score_detail,
+                review_count,
+                created_at: question.created_at.as_i64(),
             });
         }
 
@@ -433,31 +522,57 @@ impl<'a> RecommendationSystem<'a> {
 
         let mut final_questions: Vec<RecommendedQuestion> = Vec::new();
 
-        for (subject, mut questions) in subject_groups {
+        for (subject, questions) in subject_groups {
             // 按科目配置确定该科题数上限
             let limit = if subject == "未分类" {
-                // 未分类使用全局值，不可归档
                 per_subject_default_limit
             } else {
                 match subject_configs.get(&subject) {
                     None => per_subject_default_limit,
                     Some(cfg) => {
                         if cfg.archived {
-                            continue; // 跳过已归档的科目
+                            continue;
                         }
                         match cfg.recommendation_limit {
-                            Some(0) => continue, // Some(0) 表示不推荐该科
+                            Some(0) => continue,
                             Some(n) => n.max(1),
                             None => per_subject_default_limit,
                         }
                     }
                 }
-            };
+            } as usize;
 
-            // 按分数降序排序，取 top N
-            questions.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
-            questions.truncate(limit as usize);
-            final_questions.extend(questions);
+            // 分池
+            let (mut new_questions, other_questions): (Vec<_>, Vec<_>) =
+                questions.into_iter().partition(|q| q.review_count == 0);
+
+            let guarantee = (limit as f64 * new_question_guarantee_ratio).ceil() as usize;
+
+            // 池A：新题按创建时间升序，取前 guarantee 题，标记"新题保送"
+            new_questions.sort_by_key(|q| q.created_at);
+            let take_new_count = new_questions.len().min(guarantee);
+
+            let mut selected: Vec<RecommendedQuestion> = Vec::new();
+            let mut new_iter = new_questions.into_iter();
+            for _ in 0..take_new_count {
+                if let Some(mut q) = new_iter.next() {
+                    q.reason = Some(vec!["新题保送".to_string()]);
+                    selected.push(q);
+                }
+            }
+            let new_remaining: Vec<RecommendedQuestion> = new_iter.collect();
+
+            // 池B：池A落选的新题 + 其他题，按分数降序
+            let mut pool_b: Vec<RecommendedQuestion> = Vec::new();
+            pool_b.extend(new_remaining);
+            pool_b.extend(other_questions);
+            pool_b.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+
+            let remaining_slots = limit - selected.len();
+            pool_b.truncate(remaining_slots);
+            selected.extend(pool_b);
+
+            final_questions.extend(selected);
         }
 
         // 整体按分数排序

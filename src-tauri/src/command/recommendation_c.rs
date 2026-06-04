@@ -23,7 +23,7 @@ pub fn get_daily_recommendation_comm(
     };
     let rs = RecommendationSystem::new(conn);
     let settings = config::load_settings();
-    rs.get_daily_recommendation(&settings.subjects, settings.per_subject_daily_limit)
+    rs.get_daily_recommendation(&settings.subjects, settings.per_subject_daily_limit, settings.new_question_guarantee_ratio)
         .map_err(|e| e.to_string())
 }
 
@@ -63,6 +63,7 @@ pub fn preview_recommendation_comm(
         show_exclusion_reason,
         &settings.subjects,
         settings.per_subject_daily_limit,
+        settings.new_question_guarantee_ratio,
     )
     .map_err(|e| e.to_string())
 }
@@ -99,7 +100,7 @@ pub fn regenerate_daily_recommendation_comm(
     let rs = RecommendationSystem::new(conn);
     let settings = config::load_settings();
     let daily = rs
-        .get_daily_recommendation(&settings.subjects, settings.per_subject_daily_limit)
+        .get_daily_recommendation(&settings.subjects, settings.per_subject_daily_limit, settings.new_question_guarantee_ratio)
         .map_err(|e| e.to_string())?;
 
     let new_count = daily.questions.len();
@@ -213,7 +214,7 @@ pub fn get_questions_by_ids_comm(
         result.push(RecommendedQuestion {
             question_id: i64::from(q.id),
             name: q.name,
-            score: 0.0, // 不需要评分
+            score: 0.0,
             state: q.state.as_str().to_string(),
             due_at: q.due_at.map(|t| t.as_i64()),
             correct_streak: q.correct_streak,
@@ -223,6 +224,8 @@ pub fn get_questions_by_ids_comm(
             subject,
             reason: None,
             score_detail: None,
+            review_count: 0,
+            created_at: 0,
         });
     }
 

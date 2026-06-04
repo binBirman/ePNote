@@ -66,6 +66,8 @@ impl<'a> RecommendationDao<'a> {
                 subject: row.get(9)?,
                 reason,
                 score_detail: None,
+                review_count: 0,
+                created_at: 0,
             })
         })?;
 
@@ -260,6 +262,8 @@ impl<'a> RecommendationDao<'a> {
                 subject: row.get(9)?,
                 reason,
                 score_detail: None,
+                review_count: 0,
+                created_at: 0,
             })
         })?;
 
