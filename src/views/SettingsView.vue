@@ -156,7 +156,31 @@ async function copyDataPath() {
             </button>
           </div>
         </div>
+
+        <!-- 开发者模式 -->
+        <div class="setting-row">
+          <div class="setting-info">
+            <span class="setting-label">开发者模式</span>
+            <span class="setting-desc">启用开发者中心，可查看推荐详情和调试功能</span>
+          </div>
+          <div class="setting-control">
+            <button
+              class="toggle-btn"
+              :class="{ active: store.developerMode }"
+              @click="store.developerMode = !store.developerMode"
+            >
+              {{ store.developerMode ? '开' : '关' }}
+            </button>
+          </div>
+        </div>
       </div>
+    </div>
+
+    <!-- 开发者入口 -->
+    <div v-if="store.developerMode" class="settings-card dev-entry-card">
+      <h2 class="card-title">开发者</h2>
+      <p class="dev-desc">推荐算法调试与预览工具</p>
+      <router-link to="/dev/center" class="dev-link">进入开发者中心</router-link>
     </div>
 
     <!-- 科目池管理 -->
@@ -535,5 +559,32 @@ async function copyDataPath() {
 .save-message {
   font-size: 14px;
   color: #4CAF50;
+}
+
+/* 开发者入口 */
+.dev-entry-card {
+  border: 1px solid #e0e0e0;
+}
+
+.dev-desc {
+  font-size: 13px;
+  color: #888;
+  margin-bottom: 16px;
+}
+
+.dev-link {
+  display: inline-block;
+  padding: 10px 28px;
+  background-color: #333;
+  color: #fff;
+  text-decoration: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.dev-link:hover {
+  background-color: #555;
 }
 </style>

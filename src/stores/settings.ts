@@ -16,6 +16,9 @@ export const useSettingsStore = defineStore('settings', () => {
   const subjectConfigs = ref<Record<string, SubjectConfig>>({})
   const allSubjects = ref<string[]>([])
 
+  // 开发者模式（纯运行时，不持久化）
+  const developerMode = ref<boolean>(false)
+
   // 数据目录（只读展示）
   const dataRoot = ref<string>('')
   const loaded = ref<boolean>(false)
@@ -83,6 +86,7 @@ export const useSettingsStore = defineStore('settings', () => {
     newQuestionRatio,
     recommendationRandomness,
     showDebugInfo,
+    developerMode,
     subjectConfigs,
     allSubjects,
     dataRoot,

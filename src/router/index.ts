@@ -73,6 +73,24 @@ const router = createRouter({
       component: () => import('../views/SettingsView.vue'),
       meta: { requiresInit: true }
     },
+    {
+      path: '/dev/center',
+      name: 'dev-center',
+      component: () => import('../views/DevCenterView.vue'),
+      meta: { requiresInit: true }
+    },
+    {
+      path: '/dev/recommendation-list',
+      name: 'dev-recommendation-list',
+      component: () => import('../views/DevRecommendationListView.vue'),
+      meta: { requiresInit: true }
+    },
+    {
+      path: '/dev/preview-recommendation',
+      name: 'dev-preview-recommendation',
+      component: () => import('../views/DevPreviewRecommendationView.vue'),
+      meta: { requiresInit: true }
+    },
   ],
 })
 

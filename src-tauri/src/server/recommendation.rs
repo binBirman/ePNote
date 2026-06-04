@@ -56,6 +56,32 @@ pub struct DailyRecommendation {
     pub questions: Vec<RecommendedQuestion>,
 }
 
+/// 预览推荐项（展示全部题目的评分和入选状态）
+#[derive(Debug, Clone, Serialize)]
+pub struct PreviewRecommendationItem {
+    pub question_id: i64,
+    pub name: String,
+    pub subject: Option<String>,
+    pub score: f64,
+    pub selected: bool,
+    pub reason: Vec<String>,
+    pub exclusion_reason: Vec<String>,
+    pub score_detail: Option<ScoreDetail>,
+    pub subject_rank: usize,
+    pub subject_limit: usize,
+}
+
+/// 推荐统计信息
+#[derive(Debug, Clone, Serialize)]
+pub struct RecommendationStats {
+    pub total_questions: usize,
+    pub participating_questions: usize,
+    pub archived_subjects: Vec<String>,
+    pub recommended_count: usize,
+    pub new_questions: usize,
+    pub pending_review: usize,
+}
+
 /// 推荐系统
 pub struct RecommendationSystem<'a> {
     conn: &'a Connection,
@@ -100,6 +126,220 @@ impl<'a> RecommendationSystem<'a> {
         self.recommendation_dao.insert_batch(day, &questions)?;
 
         Ok(DailyRecommendation { day, questions })
+    }
+
+    /// 预览推荐：对全部题目评分，标记入选/落选状态，不写库
+    pub fn preview_recommendation(
+        &self,
+        show_score_detail: bool,
+        show_exclusion_reason: bool,
+        subject_configs: &HashMap<String, SubjectConfig>,
+        per_subject_default_limit: u32,
+    ) -> Result<Vec<PreviewRecommendationItem>, DbError> {
+        let now = now_ts();
+        let all_questions = self.get_all_active_questions()?;
+
+        if all_questions.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let review_summaries = self.review_dao.get_all_error_rates()?;
+        let subject_key = "system.Subject";
+
+        // Step 1: 为每道题计算评分（复用现有逻辑）
+        let mut scored_questions: Vec<RecommendedQuestion> = Vec::new();
+
+        for question in all_questions {
+            let qid = i64::from(question.id.clone());
+
+            let (review_count, error_rate) = review_summaries
+                .get(&qid)
+                .map(|&(err_rate, cnt)| (cnt, Some(err_rate)))
+                .unwrap_or((0, None));
+
+            let detail = self.calculate_score(&question, now, review_count, error_rate);
+
+            let overdue_days = question.due_at
+                .map(|d| ((now.as_i64() - d.as_i64()) as f64 / DAY_SECONDS as f64).max(0.0))
+                .unwrap_or(0.0);
+
+            let last_result_str = question.last_result.map(|r| r.as_str().to_string());
+
+            let reason = Self::generate_reason(
+                review_count,
+                detail.forget_risk,
+                overdue_days,
+                &last_result_str,
+                error_rate,
+            );
+
+            let subject = self.meta_dao
+                .get_by_question_key(question.id.clone(), subject_key)
+                .ok()
+                .flatten()
+                .map(|m| m.value);
+
+            let score_detail = if show_score_detail {
+                Some(detail)
+            } else {
+                None
+            };
+
+            scored_questions.push(RecommendedQuestion {
+                question_id: qid,
+                name: question.name,
+                score: detail.final_score,
+                state: question.state.as_str().to_string(),
+                due_at: question.due_at.map(|t| t.as_i64()),
+                correct_streak: question.correct_streak,
+                wrong_count: question.wrong_count,
+                last_result: last_result_str,
+                error_rate,
+                subject,
+                reason,
+                score_detail,
+            });
+        }
+
+        // Step 2: 按科目分组
+        let mut subject_groups: HashMap<String, Vec<RecommendedQuestion>> = HashMap::new();
+        for q in scored_questions {
+            let subject = q.subject.clone().unwrap_or_else(|| "未分类".to_string());
+            subject_groups.entry(subject).or_default().push(q);
+        }
+
+        // Step 3: 每组内标记入选/落选
+        let mut results: Vec<PreviewRecommendationItem> = Vec::new();
+
+        for (subject, mut group) in subject_groups {
+            let (archived, limit) = if subject == "未分类" {
+                (false, per_subject_default_limit as usize)
+            } else {
+                match subject_configs.get(&subject) {
+                    None => (false, per_subject_default_limit as usize),
+                    Some(cfg) => {
+                        if cfg.archived {
+                            (true, 0)
+                        } else {
+                            match cfg.recommendation_limit {
+                                Some(0) => (true, 0),
+                                Some(n) => (false, n.max(1) as usize),
+                                None => (false, per_subject_default_limit as usize),
+                            }
+                        }
+                    }
+                }
+            };
+
+            group.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+            let total = group.len();
+
+            for (rank, q) in group.into_iter().enumerate() {
+                let rank_1 = rank + 1; // 1-based
+                let selected = !archived && rank < limit;
+
+                let exclusion_reason: Vec<String> = if show_exclusion_reason && !selected {
+                    if archived {
+                        vec!["科目已归档".to_string()]
+                    } else {
+                        vec![format!("同科排名第{}/{}，分数低于入选线", rank_1, total)]
+                    }
+                } else {
+                    vec![]
+                };
+
+                results.push(PreviewRecommendationItem {
+                    question_id: q.question_id,
+                    name: q.name.unwrap_or_default(),
+                    subject: q.subject,
+                    score: q.score,
+                    selected,
+                    reason: q.reason.unwrap_or_default(),
+                    exclusion_reason,
+                    score_detail: q.score_detail,
+                    subject_rank: rank_1,
+                    subject_limit: if archived { 0 } else { limit },
+                });
+            }
+        }
+
+        // 整体按分数降序
+        results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+
+        Ok(results)
+    }
+
+    /// 获取推荐统计概览
+    pub fn get_recommendation_stats(
+        &self,
+        subject_configs: &HashMap<String, SubjectConfig>,
+    ) -> Result<RecommendationStats, DbError> {
+        let all_questions = self.get_all_active_questions()?;
+        let review_summaries = self.review_dao.get_all_error_rates()?;
+        let subject_key = "system.Subject";
+        let now = now_ts();
+
+        let total_questions = all_questions.len();
+        let mut participating = 0usize;
+        let mut new_count = 0usize;
+        let mut pending_review = 0usize;
+
+        // 收集已归档科目
+        let mut archived_subjects: Vec<String> = Vec::new();
+        for (name, cfg) in subject_configs {
+            if cfg.archived {
+                archived_subjects.push(name.clone());
+            }
+        }
+        archived_subjects.sort();
+
+        for question in &all_questions {
+            let qid = i64::from(question.id.clone());
+
+            let review_count = review_summaries.get(&qid).map(|&(_, cnt)| cnt).unwrap_or(0);
+            if review_count == 0 {
+                new_count += 1;
+            }
+
+            let subject = self.meta_dao
+                .get_by_question_key(question.id.clone(), subject_key)
+                .ok()
+                .flatten()
+                .map(|m| m.value);
+
+            let is_archived = subject
+                .as_ref()
+                .and_then(|s| subject_configs.get(s))
+                .map(|cfg| cfg.archived)
+                .unwrap_or(false);
+
+            if !is_archived {
+                participating += 1;
+            }
+
+            if let Some(due) = question.due_at {
+                if due.as_i64() <= now.as_i64() {
+                    pending_review += 1;
+                }
+            }
+        }
+
+        // 今日推荐题数
+        let day = LogicalDay::from(now).0 as i64;
+        let recommended_count = self
+            .recommendation_dao
+            .get_by_day(day)?
+            .map(|qs| qs.len())
+            .unwrap_or(0);
+
+        Ok(RecommendationStats {
+            total_questions,
+            participating_questions: participating,
+            archived_subjects,
+            recommended_count,
+            new_questions: new_count,
+            pending_review,
+        })
     }
 
     /// 生成推荐列表，按科目配置控制每科题数

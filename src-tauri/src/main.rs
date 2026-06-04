@@ -76,6 +76,10 @@ fn main() {
             recommendation_c::get_daily_review_status_comm,
             recommendation_c::get_today_review_records_comm,
             recommendation_c::get_questions_by_ids_comm,
+            // 开发者模式命令
+            recommendation_c::preview_recommendation_comm,
+            recommendation_c::regenerate_daily_recommendation_comm,
+            recommendation_c::get_recommendation_stats_comm,
             // 设置相关命令
             settings_c::get_app_settings_comm,
             settings_c::save_app_settings_comm,

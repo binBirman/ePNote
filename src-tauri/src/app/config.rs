@@ -66,6 +66,19 @@ impl Default for AppSettings {
     }
 }
 
+/// 开发者设置（应用行为配置，不持久化）
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct AppDevSettings {
+    #[serde(default)]
+    pub developer_mode: bool,
+}
+
+impl Default for AppDevSettings {
+    fn default() -> Self {
+        Self { developer_mode: false }
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 struct AppConfig {
     root: String,

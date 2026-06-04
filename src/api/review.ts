@@ -47,6 +47,28 @@ export interface ReviewRecord {
   subject: string | null
 }
 
+export interface PreviewRecommendationItem {
+  question_id: number
+  name: string
+  subject: string | null
+  score: number
+  selected: boolean
+  reason: string[]
+  exclusion_reason: string[]
+  score_detail: ScoreDetail | null
+  subject_rank: number
+  subject_limit: number
+}
+
+export interface RecommendationStats {
+  total_questions: number
+  participating_questions: number
+  archived_subjects: string[]
+  recommended_count: number
+  new_questions: number
+  pending_review: number
+}
+
 /**
  * 获取每日推荐（新推荐系统）
  * @returns 每日推荐结果
@@ -176,4 +198,30 @@ export function getQuestionsByIds(questionIds: number[]) {
   return call<RecommendedQuestion[]>("get_questions_by_ids_comm", {
     questionIds,
   });
+}
+
+/**
+ * 预览推荐（展示全部题目的评分和入选状态，不写库）
+ * @param showScoreDetail 是否显示评分详情
+ * @param showExclusionReason 是否显示落选原因
+ */
+export function previewRecommendation(showScoreDetail: boolean, showExclusionReason: boolean) {
+  return call<PreviewRecommendationItem[]>("preview_recommendation_comm", {
+    showScoreDetail,
+    showExclusionReason,
+  });
+}
+
+/**
+ * 重新生成今日推荐（删除缓存后重新生成）
+ */
+export function regenerateDailyRecommendation() {
+  return call<DailyRecommendation>("regenerate_daily_recommendation_comm", {});
+}
+
+/**
+ * 获取推荐统计概览
+ */
+export function getRecommendationStats() {
+  return call<RecommendationStats>("get_recommendation_stats_comm", {});
 }
