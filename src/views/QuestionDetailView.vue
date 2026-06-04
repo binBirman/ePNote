@@ -185,8 +185,8 @@ const closePreview = () => {
 const moveQuestionImageUp = async (index: number) => {
   if (index <= 0) return
   // 交换数组中的位置
-  const temp = questionImages.value[index]
-  questionImages.value[index] = questionImages.value[index - 1]
+  const temp = questionImages.value[index]!
+  questionImages.value[index] = questionImages.value[index - 1]!
   questionImages.value[index - 1] = temp
   // 更新排序
   questionImages.value.forEach((item, i) => {
@@ -198,8 +198,8 @@ const moveQuestionImageUp = async (index: number) => {
 
 const moveQuestionImageDown = async (index: number) => {
   if (index >= questionImages.value.length - 1) return
-  const temp = questionImages.value[index]
-  questionImages.value[index] = questionImages.value[index + 1]
+  const temp = questionImages.value[index]!
+  questionImages.value[index] = questionImages.value[index + 1]!
   questionImages.value[index + 1] = temp
   // 更新排序
   questionImages.value.forEach((item, i) => {
@@ -211,8 +211,8 @@ const moveQuestionImageDown = async (index: number) => {
 
 const moveAnswerImageUp = async (index: number) => {
   if (index <= 0) return
-  const temp = answerImages.value[index]
-  answerImages.value[index] = answerImages.value[index - 1]
+  const temp = answerImages.value[index]!
+  answerImages.value[index] = answerImages.value[index - 1]!
   answerImages.value[index - 1] = temp
   // 更新排序
   answerImages.value.forEach((item, i) => {
@@ -224,8 +224,8 @@ const moveAnswerImageUp = async (index: number) => {
 
 const moveAnswerImageDown = async (index: number) => {
   if (index >= answerImages.value.length - 1) return
-  const temp = answerImages.value[index]
-  answerImages.value[index] = answerImages.value[index + 1]
+  const temp = answerImages.value[index]!
+  answerImages.value[index] = answerImages.value[index + 1]!
   answerImages.value[index + 1] = temp
   // 更新排序
   answerImages.value.forEach((item, i) => {
@@ -315,7 +315,7 @@ const selectAnswerImages = async () => {
 
 // 删除题目图片
 const removeQuestionImage = async (index: number) => {
-  const img = questionImages.value[index]
+  const img = questionImages.value[index]!
   if (!img.asset_id) return
 
   if (!confirm('确定要删除这张图片吗？')) return
@@ -336,7 +336,7 @@ const removeQuestionImage = async (index: number) => {
 
 // 删除答案图片
 const removeAnswerImage = async (index: number) => {
-  const img = answerImages.value[index]
+  const img = answerImages.value[index]!
   if (!img.asset_id) return
 
   if (!confirm('确定要删除这张图片吗？')) return

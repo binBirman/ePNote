@@ -59,10 +59,10 @@ const loadImageBase64 = async (path: string): Promise<string> => {
 const loadImagePreview = async (paths: string[]): Promise<ImageItem[]> => {
   const items: ImageItem[] = []
   for (let i = 0; i < paths.length; i++) {
-    const base64 = await loadImageBase64(paths[i])
+    const base64 = await loadImageBase64(paths[i]!)
     items.push({
-      path: paths[i],
-      base64,
+      path: paths[i]!,
+      base64: base64!,
       sortOrder: i,
     })
   }
@@ -95,7 +95,7 @@ const onDrop = (targetItem: ImageItem, arrayType: 'question' | 'answer') => {
     // 移除旧位置的元素
     const [removed] = array.value.splice(oldIndex, 1)
     // 插入到新位置
-    array.value.splice(newIndex, 0, removed)
+    array.value.splice(newIndex, 0, removed!)
     // 更新排序
     array.value.forEach((item, index) => {
       item.sortOrder = index
@@ -265,8 +265,8 @@ const removeAnswerImage = (index: number) => {
 // 向上移动图片
 const moveQuestionImageUp = (index: number) => {
   if (index <= 0) return
-  const temp = questionQuestionImages.value[index]
-  questionQuestionImages.value[index] = questionQuestionImages.value[index - 1]
+  const temp = questionQuestionImages.value[index]!
+  questionQuestionImages.value[index] = questionQuestionImages.value[index - 1]!
   questionQuestionImages.value[index - 1] = temp
   // 更新排序
   questionQuestionImages.value.forEach((item, i) => {
@@ -276,8 +276,8 @@ const moveQuestionImageUp = (index: number) => {
 
 const moveQuestionImageDown = (index: number) => {
   if (index >= questionQuestionImages.value.length - 1) return
-  const temp = questionQuestionImages.value[index]
-  questionQuestionImages.value[index] = questionQuestionImages.value[index + 1]
+  const temp = questionQuestionImages.value[index]!
+  questionQuestionImages.value[index] = questionQuestionImages.value[index + 1]!
   questionQuestionImages.value[index + 1] = temp
   // 更新排序
   questionQuestionImages.value.forEach((item, i) => {
@@ -287,8 +287,8 @@ const moveQuestionImageDown = (index: number) => {
 
 const moveAnswerImageUp = (index: number) => {
   if (index <= 0) return
-  const temp = questionAnswerImages.value[index]
-  questionAnswerImages.value[index] = questionAnswerImages.value[index - 1]
+  const temp = questionAnswerImages.value[index]!
+  questionAnswerImages.value[index] = questionAnswerImages.value[index - 1]!
   questionAnswerImages.value[index - 1] = temp
   // 更新排序
   questionAnswerImages.value.forEach((item, i) => {
@@ -298,8 +298,8 @@ const moveAnswerImageUp = (index: number) => {
 
 const moveAnswerImageDown = (index: number) => {
   if (index >= questionAnswerImages.value.length - 1) return
-  const temp = questionAnswerImages.value[index]
-  questionAnswerImages.value[index] = questionAnswerImages.value[index + 1]
+  const temp = questionAnswerImages.value[index]!
+  questionAnswerImages.value[index] = questionAnswerImages.value[index + 1]!
   questionAnswerImages.value[index + 1] = temp
   // 更新排序
   questionAnswerImages.value.forEach((item, i) => {
