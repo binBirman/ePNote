@@ -1,8 +1,14 @@
 import { call } from "./core";
 
+export interface SubjectConfig {
+  archived: boolean;
+  recommendation_limit: number | null;
+}
+
 export interface AppSettings {
   default_review_limit: number;
-  daily_recommendation_limit: number;
+  per_subject_daily_limit: number;
+  subjects: Record<string, SubjectConfig>;
   new_question_ratio: number;
   recommendation_randomness: number;
   show_debug_info: boolean;

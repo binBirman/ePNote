@@ -2,22 +2,10 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { getRecommendationList, processReview, listSubjects, getQuestionsByIds, getDailyRecommendation } from '@/api/review'
+import type { RecommendedQuestion } from '@/api/review'
 import { getQuestionData, getImageBase64 } from '@/api/question'
 import { useSettingsStore } from '@/stores/settings'
 import type { RecommendQuestion, ReviewResult, QuestionImage } from '@/types/question'
-
-// 新推荐系统的题目类型
-interface RecommendedQuestion {
-  question_id: number
-  name: string | null
-  score: number
-  state: string
-  due_at: number | null
-  correct_streak: number
-  wrong_count: number
-  last_result: string | null
-  error_rate: number | null
-}
 
 const router = useRouter()
 const route = useRoute()
@@ -57,7 +45,7 @@ onMounted(async () => {
 
   try {
     // 先调用 getDailyRecommendation 生成当日推荐（如有必要）
-    await getDailyRecommendation(settingsStore.dailyRecommendationLimit)
+    await getDailyRecommendation()
 
     let result
 
@@ -194,6 +182,14 @@ const goBack = () => {
           <div class="question-meta">
             <span class="meta-tag">{{ currentQuestion.detail?.subject || '未分类' }}</span>
             <span v-for="kp in (currentQuestion.detail?.knowledge_points || []).slice(0, 2)" :key="kp" class="meta-tag">{{ kp }}</span>
+          </div>
+        </div>
+
+        <!-- 推荐理由（调试模式） -->
+        <div v-if="settingsStore.showDebugInfo && currentQuestion.reason?.length" class="reason-section">
+          <div class="reason-label">推荐理由：</div>
+          <div class="reason-tags">
+            <span v-for="(r, i) in currentQuestion.reason" :key="i" class="reason-tag">{{ r }}</span>
           </div>
         </div>
 
@@ -361,6 +357,37 @@ const goBack = () => {
   border-radius: 4px;
   font-size: 13px;
   color: #666;
+}
+
+/* 推荐理由 */
+.reason-section {
+  background-color: #fff8e1;
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 20px;
+  border-left: 4px solid #ff9800;
+}
+
+.reason-label {
+  font-size: 13px;
+  color: #e65100;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.reason-tags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.reason-tag {
+  padding: 4px 10px;
+  background-color: #fff3e0;
+  border: 1px solid #ffcc80;
+  border-radius: 12px;
+  font-size: 12px;
+  color: #e65100;
 }
 
 .question-images {

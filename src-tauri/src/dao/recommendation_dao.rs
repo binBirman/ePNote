@@ -37,7 +37,8 @@ impl<'a> RecommendationDao<'a> {
                 q.wrong_count,
                 q.last_result,
                 rs.error_rate,
-                r.subject
+                r.subject,
+                r.reason
             FROM recommendation r
             JOIN question q ON r.question_id = q.id
             LEFT JOIN review_summary rs ON r.question_id = rs.question_id
@@ -48,6 +49,10 @@ impl<'a> RecommendationDao<'a> {
         )?;
 
         let rows = stmt.query_map([day], |row| {
+            let reason_text: Option<String> = row.get(10)?;
+            let reason = reason_text
+                .filter(|t| t != "null")
+                .and_then(|t| serde_json::from_str(&t).ok());
             Ok(RecommendedQuestion {
                 question_id: row.get(0)?,
                 name: row.get(1)?,
@@ -59,7 +64,7 @@ impl<'a> RecommendationDao<'a> {
                 last_result: row.get(7)?,
                 error_rate: row.get(8)?,
                 subject: row.get(9)?,
-                reason: None,
+                reason,
                 score_detail: None,
             })
         })?;
@@ -87,11 +92,12 @@ impl<'a> RecommendationDao<'a> {
 
         // 插入新推荐
         let mut stmt = self.conn.prepare(
-            "INSERT INTO recommendation (day, question_id, score, subject) VALUES (?1, ?2, ?3, ?4)"
+            "INSERT INTO recommendation (day, question_id, score, subject, reason) VALUES (?1, ?2, ?3, ?4, ?5)"
         )?;
 
         for q in questions {
-            stmt.execute(rusqlite::params![day, q.question_id, q.score, q.subject])?;
+            let reason_json = serde_json::to_string(&q.reason).unwrap_or_else(|_| "null".to_string());
+            stmt.execute(rusqlite::params![day, q.question_id, q.score, q.subject, reason_json])?;
         }
 
         Ok(())
@@ -218,7 +224,8 @@ impl<'a> RecommendationDao<'a> {
                 q.wrong_count,
                 q.last_result,
                 rs.error_rate,
-                r.subject
+                r.subject,
+                r.reason
             FROM recommendation r
             JOIN question q ON r.question_id = q.id
             LEFT JOIN review_summary rs ON r.question_id = rs.question_id
@@ -236,6 +243,10 @@ impl<'a> RecommendationDao<'a> {
         )?;
 
         let rows = stmt.query_map(rusqlite::params![day, day_start.0, day_end.0, limit], |row| {
+            let reason_text: Option<String> = row.get(10)?;
+            let reason = reason_text
+                .filter(|t| t != "null")
+                .and_then(|t| serde_json::from_str(&t).ok());
             Ok(RecommendedQuestion {
                 question_id: row.get(0)?,
                 name: row.get(1)?,
@@ -247,7 +258,7 @@ impl<'a> RecommendationDao<'a> {
                 last_result: row.get(7)?,
                 error_rate: row.get(8)?,
                 subject: row.get(9)?,
-                reason: None,
+                reason,
                 score_detail: None,
             })
         })?;

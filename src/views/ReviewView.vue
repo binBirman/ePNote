@@ -12,7 +12,6 @@ const selectedSubject = ref<string>('ALL')
 const pendingQuestions = ref<any[]>([])
 const loading = ref(false)
 const reviewLimit = ref<number>(settingsStore.defaultReviewLimit)
-const maxLimit = ref<number>(settingsStore.dailyRecommendationLimit)
 
 // 每日复习状态
 const reviewStatus = ref({
@@ -25,7 +24,7 @@ onMounted(async () => {
   loading.value = true
   try {
     // 先调用 getDailyRecommendation 生成当日推荐（如有必要）
-    await getDailyRecommendation(settingsStore.dailyRecommendationLimit)
+    await getDailyRecommendation()
 
     // 获取科目列表
     const subjectList = await listSubjects()
@@ -57,7 +56,7 @@ const loadReviewStatus = async () => {
 const loadPendingQuestions = async () => {
   try {
     // 使用新推荐系统获取每日推荐
-    const result = await getRecommendationList(maxLimit.value)
+    const result = await getRecommendationList(200)
     pendingQuestions.value = result
   } catch (e) {
     console.error('加载推荐题目失败:', e)

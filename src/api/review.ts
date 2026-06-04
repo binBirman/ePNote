@@ -3,6 +3,16 @@ import { call } from "./core";
 import type { RecommendResult, ReviewResult } from "@/types/question";
 
 // 新推荐系统的类型
+
+export interface ScoreDetail {
+  forget_risk: number
+  freshness_bonus: number
+  last_wrong_bonus: number
+  error_rate_bonus: number
+  randomness: number
+  final_score: number
+}
+
 export interface RecommendedQuestion {
   question_id: number
   name: string | null
@@ -14,6 +24,8 @@ export interface RecommendedQuestion {
   last_result: string | null
   error_rate: number | null
   subject: string | null
+  reason?: string[]
+  score_detail?: ScoreDetail
 }
 
 export interface DailyRecommendation {
@@ -37,13 +49,10 @@ export interface ReviewRecord {
 
 /**
  * 获取每日推荐（新推荐系统）
- * @param targetCount 推荐数量，默认 10
  * @returns 每日推荐结果
  */
-export function getDailyRecommendation(targetCount?: number) {
-  return call<DailyRecommendation>("get_daily_recommendation_comm", {
-    targetCount,
-  });
+export function getDailyRecommendation() {
+  return call<DailyRecommendation>("get_daily_recommendation_comm", {});
 }
 
 /**

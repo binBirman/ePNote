@@ -2,6 +2,9 @@
 //!
 //! 实现基于 Anki 改进的复习调度和推荐排序算法
 
+use std::collections::HashMap;
+
+use crate::app::config::SubjectConfig;
 use crate::dao::question_dao::QuestionDao;
 use crate::dao::recommendation_dao::RecommendationDao;
 use crate::dao::review_dao::ReviewDao;
@@ -74,7 +77,11 @@ impl<'a> RecommendationSystem<'a> {
     }
 
     /// 获取或生成每日推荐
-    pub fn get_daily_recommendation(&self, target_count: i64) -> Result<DailyRecommendation, DbError> {
+    pub fn get_daily_recommendation(
+        &self,
+        subject_configs: &HashMap<String, SubjectConfig>,
+        per_subject_default_limit: u32,
+    ) -> Result<DailyRecommendation, DbError> {
         let now = now_ts();
         let day = LogicalDay::from(now).0 as i64;
 
@@ -87,7 +94,7 @@ impl<'a> RecommendationSystem<'a> {
         self.recommendation_dao.cleanup_old_recommendations(day)?;
 
         // 生成新推荐
-        let questions = self.generate_recommendation(day, now, target_count)?;
+        let questions = self.generate_recommendation(now, subject_configs, per_subject_default_limit)?;
 
         // 保存到数据库
         self.recommendation_dao.insert_batch(day, &questions)?;
@@ -95,12 +102,12 @@ impl<'a> RecommendationSystem<'a> {
         Ok(DailyRecommendation { day, questions })
     }
 
-    /// 生成推荐列表，按科目均分 target_count 条
+    /// 生成推荐列表，按科目配置控制每科题数
     fn generate_recommendation(
         &self,
-        _day: i64,
         now: Timestamp,
-        target_count: i64,
+        subject_configs: &HashMap<String, SubjectConfig>,
+        per_subject_default_limit: u32,
     ) -> Result<Vec<RecommendedQuestion>, DbError> {
         // 获取所有未删除的题目
         let all_questions = self.get_all_active_questions()?;
@@ -176,24 +183,40 @@ impl<'a> RecommendationSystem<'a> {
             });
         }
 
-        // 按科目分组，每科取10题
-        let mut subject_groups: std::collections::HashMap<String, Vec<RecommendedQuestion>> = std::collections::HashMap::new();
+        // 按科目分组（无科目的归入 "未分类"）
+        let mut subject_groups: HashMap<String, Vec<RecommendedQuestion>> = HashMap::new();
 
         for q in scored_questions {
             let subject = q.subject.clone().unwrap_or_else(|| "未分类".to_string());
             subject_groups.entry(subject).or_insert_with(Vec::new).push(q);
         }
 
-        // 按科目数均分 target_count，每科至少取 1 题
-        let num_subjects = subject_groups.len().max(1);
-        let per_subject_limit = ((target_count as usize) / num_subjects).max(1);
         let mut final_questions: Vec<RecommendedQuestion> = Vec::new();
 
-        for (_, mut questions) in subject_groups {
-            // 按分数降序排序
+        for (subject, mut questions) in subject_groups {
+            // 按科目配置确定该科题数上限
+            let limit = if subject == "未分类" {
+                // 未分类使用全局值，不可归档
+                per_subject_default_limit
+            } else {
+                match subject_configs.get(&subject) {
+                    None => per_subject_default_limit,
+                    Some(cfg) => {
+                        if cfg.archived {
+                            continue; // 跳过已归档的科目
+                        }
+                        match cfg.recommendation_limit {
+                            Some(0) => continue, // Some(0) 表示不推荐该科
+                            Some(n) => n.max(1),
+                            None => per_subject_default_limit,
+                        }
+                    }
+                }
+            };
+
+            // 按分数降序排序，取 top N
             questions.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
-            // 取前10题
-            questions.truncate(per_subject_limit);
+            questions.truncate(limit as usize);
             final_questions.extend(questions);
         }
 

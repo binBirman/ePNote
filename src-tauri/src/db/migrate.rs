@@ -147,6 +147,13 @@ const MIGRATIONS: &[Migration] = &[
         ) + 1;
         "#,
     },
+    Migration {
+        version: 8,
+        name: "add_reason_to_recommendation",
+        sql: r#"
+        ALTER TABLE recommendation ADD COLUMN reason TEXT;
+        "#,
+    },
 ];
 
 /*

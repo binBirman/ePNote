@@ -12,6 +12,7 @@ onMounted(async () => {
   if (!store.loaded) {
     await store.loadSettings()
   }
+  await store.loadSubjectPool()
 })
 
 async function handleSave() {
@@ -70,25 +71,25 @@ async function copyDataPath() {
         </div>
       </div>
 
-      <!-- 每日推荐上限 -->
+      <!-- 每科每日推荐题数 -->
       <div class="setting-row">
         <div class="setting-info">
-          <span class="setting-label">每日推荐上限</span>
-          <span class="setting-desc">每日推荐系统生成的最大题目总数</span>
+          <span class="setting-label">每科每日推荐题数</span>
+          <span class="setting-desc">每个科目每天推荐的题目数量</span>
         </div>
         <div class="setting-control">
           <div class="number-input-group">
-            <button class="num-btn" @click="store.dailyRecommendationLimit = Math.max(1, store.dailyRecommendationLimit - 5)">-5</button>
-            <button class="num-btn" @click="store.dailyRecommendationLimit = Math.max(1, store.dailyRecommendationLimit - 1)">-</button>
+            <button class="num-btn" @click="store.perSubjectDailyLimit = Math.max(1, store.perSubjectDailyLimit - 5)">-5</button>
+            <button class="num-btn" @click="store.perSubjectDailyLimit = Math.max(1, store.perSubjectDailyLimit - 1)">-</button>
             <input
-              v-model.number="store.dailyRecommendationLimit"
+              v-model.number="store.perSubjectDailyLimit"
               type="number"
               class="num-input"
               min="1"
-              max="200"
+              max="50"
             />
-            <button class="num-btn" @click="store.dailyRecommendationLimit = Math.min(200, store.dailyRecommendationLimit + 1)">+</button>
-            <button class="num-btn" @click="store.dailyRecommendationLimit = Math.min(200, store.dailyRecommendationLimit + 5)">+5</button>
+            <button class="num-btn" @click="store.perSubjectDailyLimit = Math.min(50, store.perSubjectDailyLimit + 1)">+</button>
+            <button class="num-btn" @click="store.perSubjectDailyLimit = Math.min(50, store.perSubjectDailyLimit + 5)">+5</button>
           </div>
         </div>
       </div>
@@ -155,6 +156,27 @@ async function copyDataPath() {
             </button>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- 科目池管理 -->
+    <div class="settings-card">
+      <h2 class="card-title">科目池管理</h2>
+      <p class="pool-desc">勾选的科目参与每日推荐，取消勾选归档该科目</p>
+
+      <!-- 正常科目 -->
+      <div v-for="subject in store.allSubjects" :key="subject" class="subject-row">
+        <input type="checkbox"
+          :checked="!store.subjectConfigs[subject]?.archived"
+          @change="store.toggleSubjectArchive(subject)" />
+        <span>{{ subject }}</span>
+      </div>
+
+      <!-- 未分类题目（虚拟科目，不在 subjectConfigs 中） -->
+      <div class="subject-row unclassified">
+        <input type="checkbox" checked disabled />
+        <span>未分类题目</span>
+        <span class="unclassified-hint">未标注科目的题目，始终参与推荐</span>
       </div>
     </div>
 
@@ -390,6 +412,45 @@ async function copyDataPath() {
   padding-left: 8px;
   border-left: 2px solid #4CAF50;
   margin-bottom: 4px;
+}
+
+/* 科目池管理 */
+.pool-desc {
+  font-size: 13px;
+  color: #999;
+  margin-bottom: 16px;
+}
+
+.subject-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f5f5f5;
+  font-size: 15px;
+  color: #333;
+}
+
+.subject-row:last-of-type {
+  border-bottom: none;
+}
+
+.subject-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #4CAF50;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.subject-row.unclassified {
+  opacity: 0.7;
+}
+
+.unclassified-hint {
+  font-size: 12px;
+  color: #aaa;
+  margin-left: auto;
 }
 
 /* 数据管理 */

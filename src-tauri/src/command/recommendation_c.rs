@@ -12,7 +12,6 @@ use crate::server::recommendation::{DailyRecommendation, RecommendationSystem, R
 #[tauri::command]
 pub fn get_daily_recommendation_comm(
     state: tauri::State<AppState>,
-    target_count: Option<i64>,
 ) -> Result<DailyRecommendation, String> {
     let guard = state.inner.lock().unwrap();
     let conn = match &*guard {
@@ -21,8 +20,8 @@ pub fn get_daily_recommendation_comm(
     };
     let rs = RecommendationSystem::new(conn);
     let settings = config::load_settings();
-    let default_target = settings.daily_recommendation_limit as i64;
-    rs.get_daily_recommendation(target_count.unwrap_or(default_target)).map_err(|e| e.to_string())
+    rs.get_daily_recommendation(&settings.subjects, settings.per_subject_daily_limit)
+        .map_err(|e| e.to_string())
 }
 
 /// 获取推荐题目列表（用于复习会话）- 只返回未复习的题目

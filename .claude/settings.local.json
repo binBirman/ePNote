@@ -22,7 +22,9 @@
       "Bash(cargo clean:*)",
       "Bash(Select-Object:*)",
       "Bash(npx vue-tsc:*)",
-      "Bash(npx vite:*)"
+      "Bash(npx vite:*)",
+      "Bash(npx tauri build)",
+      "Bash(npx tauri build:*)"
     ]
   }
 }

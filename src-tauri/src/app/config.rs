@@ -2,18 +2,37 @@ use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
 const CONFIG_FILE: &str = "app_config.json";
+
+/// 科目配置
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct SubjectConfig {
+    /// 是否归档（不参与推荐）
+    #[serde(default)]
+    pub archived: bool,
+    /// 该科每日推荐题数限制，None=使用全局值，Some(0)=不推荐
+    #[serde(default)]
+    pub recommendation_limit: Option<u32>,
+}
+
+impl Default for SubjectConfig {
+    fn default() -> Self {
+        Self { archived: false, recommendation_limit: None }
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AppSettings {
     /// 默认复习题数
     #[serde(default = "default_review_limit")]
     pub default_review_limit: u32,
-    /// 每日推荐上限
-    #[serde(default = "default_daily_recommendation_limit")]
-    pub daily_recommendation_limit: u32,
+    /// 每科每日推荐默认题数
+    #[serde(default = "default_per_subject_daily_limit")]
+    pub per_subject_daily_limit: u32,
     /// 新题推荐比例（预留）
     #[serde(default = "default_new_question_ratio")]
     pub new_question_ratio: f64,
@@ -23,10 +42,13 @@ pub struct AppSettings {
     /// 显示推荐调试信息（开发用）
     #[serde(default = "default_show_debug_info")]
     pub show_debug_info: bool,
+    /// 科目配置映射
+    #[serde(default)]
+    pub subjects: HashMap<String, SubjectConfig>,
 }
 
 fn default_review_limit() -> u32 { 10 }
-fn default_daily_recommendation_limit() -> u32 { 50 }
+fn default_per_subject_daily_limit() -> u32 { 10 }
 fn default_new_question_ratio() -> f64 { 0.3 }
 fn default_recommendation_randomness() -> f64 { 1.0 }
 fn default_show_debug_info() -> bool { false }
@@ -35,10 +57,11 @@ impl Default for AppSettings {
     fn default() -> Self {
         Self {
             default_review_limit: default_review_limit(),
-            daily_recommendation_limit: default_daily_recommendation_limit(),
+            per_subject_daily_limit: default_per_subject_daily_limit(),
             new_question_ratio: default_new_question_ratio(),
             recommendation_randomness: default_recommendation_randomness(),
             show_debug_info: default_show_debug_info(),
+            subjects: HashMap::new(),
         }
     }
 }
