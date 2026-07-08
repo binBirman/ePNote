@@ -3,7 +3,6 @@ pub enum QuestionState {
     NEW,       //新题，尚未复习
     LEARNING,  //学习中，理解不稳定
     STABLE,    //稳定掌握，低频复习
-    DUE,       //已到建议复习时间
     SUSPENDED, //用户暂停复习
 }
 
@@ -13,7 +12,6 @@ impl QuestionState {
             QuestionState::NEW => "NEW",
             QuestionState::LEARNING => "LEARNING",
             QuestionState::STABLE => "STABLE",
-            QuestionState::DUE => "DUE",
             QuestionState::SUSPENDED => "SUSPENDED",
         }
     }
@@ -23,7 +21,6 @@ impl QuestionState {
             "NEW" | "new" => Some(QuestionState::NEW),
             "LEARNING" | "learning" => Some(QuestionState::LEARNING),
             "STABLE" | "stable" => Some(QuestionState::STABLE),
-            "DUE" | "due" => Some(QuestionState::DUE),
             "SUSPENDED" | "suspended" => Some(QuestionState::SUSPENDED),
             _ => None,
         }
@@ -118,8 +115,9 @@ impl MetaKey {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SystemMetaKey {
-    Subject,        // 科目
-    KnowledgePoint, // 知识点
+    Subject,          // 科目
+    KnowledgePoint,   // 知识点
+    PreSuspendState,  // 暂停前保存的状态，恢复时还原
 }
 
 impl SystemMetaKey {
@@ -127,6 +125,7 @@ impl SystemMetaKey {
         match self {
             SystemMetaKey::Subject => "Subject",
             SystemMetaKey::KnowledgePoint => "KnowledgePoint",
+            SystemMetaKey::PreSuspendState => "PreSuspendState",
         }
     }
 
@@ -135,6 +134,9 @@ impl SystemMetaKey {
             "Subject" | "subject" => Some(SystemMetaKey::Subject),
             "KnowledgePoint" | "knowledgepoint" | "knowledge_point" => {
                 Some(SystemMetaKey::KnowledgePoint)
+            }
+            "PreSuspendState" | "presuspendstate" | "pre_suspend_state" => {
+                Some(SystemMetaKey::PreSuspendState)
             }
             _ => None,
         }

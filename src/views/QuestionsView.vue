@@ -2,15 +2,21 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import type { ActiveQuestion } from '@/types/question'
-// import type { QuestionState } from '@/types/question'
 import {
-  showQuestionsWithFilters,
+  classifyQuestions,
+  searchQuestions,
   show_subjects,
-  show_states,
 } from '@/api/question'
 
 const router = useRouter()
 const route = useRoute()
+
+const STATE_OPTIONS: { value: string; label: string }[] = [
+  { value: 'NEW', label: '新题' },
+  { value: 'LEARNING', label: '学习中' },
+  { value: 'STABLE', label: '已掌握' },
+  { value: 'SUSPENDED', label: '已暂停' },
+]
 
 const searchKeyword = ref('')
 const stateFilter = ref<string>('ALL')
@@ -18,6 +24,8 @@ const subjectFilter = ref<string>('ALL')
 const pageSize = 10
 const currentPage = ref(0)
 const hasNext = ref(false)
+const errorMsg = ref('')
+
 interface LocalQuestion {
   id: number
   name: string
@@ -29,24 +37,18 @@ interface LocalQuestion {
 }
 const displayedQuestions = ref<LocalQuestion[]>([])
 const subjects = ref<string[]>([])
-const states = ref<string[]>([])
+
+const isSearching = computed(() => searchKeyword.value.trim().length > 0)
 
 onMounted(() => {
   ;(async () => {
     try {
-      const subs = await show_subjects()
-      subjects.value = subs || []
-      try {
-        const sts = await show_states()
-        states.value = sts || []
-      } catch (e) {
-        console.error('加载状态失败', e)
-        states.value = ['NEW', 'LEARNING', 'STABLE']
-      }
+      subjects.value = await show_subjects()
     } catch (e) {
       console.error('加载科目失败', e)
+      subjects.value = []
     }
-    loadQuestions()
+    await loadQuestions()
   })()
 })
 
@@ -54,69 +56,63 @@ watch(() => route.query.r, (v) => {
   if (v) loadQuestions()
 })
 
-// 防抖定时器
-let filterDebounceTimer: ReturnType<typeof setTimeout> | null = null
-
-const debouncedLoad = (page = 0) => {
-  if (filterDebounceTimer) {
-    clearTimeout(filterDebounceTimer)
-  }
-  filterDebounceTimer = setTimeout(() => {
+// 防抖：搜索框与分类控件共用
+let loadDebounce: ReturnType<typeof setTimeout> | null = null
+const scheduleLoad = (page = 0) => {
+  if (loadDebounce) clearTimeout(loadDebounce)
+  loadDebounce = setTimeout(() => {
     loadQuestions(page)
-  }, 100) // 100ms 防抖
+  }, 250)
 }
 
-// reload when filters change
-watch(subjectFilter, () => debouncedLoad(0))
-watch(stateFilter, () => debouncedLoad(0))
-// 搜索关键字变化时也重新加载（从第一页开始）
-watch(searchKeyword, () => {
-  // 搜索关键字变化时，通过后端进行全局搜索
-  debouncedLoad(0)
-})
+// 搜索或分类变化时重置到第一页
+watch(subjectFilter, () => scheduleLoad(0))
+watch(stateFilter, () => scheduleLoad(0))
+watch(searchKeyword, () => scheduleLoad(0))
+
+const clearSearch = () => {
+  searchKeyword.value = ''
+}
 
 const mapActive = (a: ActiveQuestion): LocalQuestion => ({
   id: a.id,
   name: a.title,
   subject: a.subject || '未知',
-  knowledgePoint: '',
+  knowledgePoint: a.knowledge_points.join('、'),
   lastReviewed: a.last_review || '',
   createdDate: a.created_at || '',
   state: a.status || '',
 })
 
 const loadQuestions = async (page = 0) => {
-  try {
-    // 使用综合筛选API，将所有筛选条件传递给后端
-    // 将空字符串转换为 null
-    const keyword = searchKeyword.value.trim() || null
-    const subject = subjectFilter.value !== 'ALL' ? subjectFilter.value : null
-    const state = stateFilter.value !== 'ALL' ? stateFilter.value : null
+  errorMsg.value = ''
+  const subject = subjectFilter.value === 'ALL' ? null : subjectFilter.value
+  const questionState = stateFilter.value === 'ALL' ? null : stateFilter.value
 
-    const res = await showQuestionsWithFilters(
-      keyword,
-      subject,
-      state,
-      page,
-      pageSize
-    )
+  try {
+    const res = isSearching.value
+      ? await searchQuestions({
+          query: searchKeyword.value.trim(),
+          subject,
+          questionState,
+          page,
+          pageSize,
+        })
+      : await classifyQuestions({ subject, questionState, page, pageSize })
 
     displayedQuestions.value = res.map(mapActive)
-
     currentPage.value = page
     hasNext.value = res.length >= pageSize
   } catch (e) {
-    console.error('加载题目失败', e)
+    const msg = e instanceof Error ? e.message : String(e)
+    errorMsg.value = msg
+    console.error('加载题目失败', msg)
     displayedQuestions.value = []
-    subjects.value = []
     hasNext.value = false
   }
 }
 
-const filteredQuestions = computed(() => {
-  // 所有筛选都由后端处理，直接返回结果
-  return displayedQuestions.value
-})
+const filteredQuestions = computed(() => displayedQuestions.value)
 
 const getStateColor = (state: string) => {
   switch (state) {
@@ -126,6 +122,8 @@ const getStateColor = (state: string) => {
       return '#FF9800'
     case 'STABLE':
       return '#4CAF50'
+    case 'SUSPENDED':
+      return '#9E9E9E'
     default:
       return '#999'
   }
@@ -139,6 +137,8 @@ const getStateLabel = (state: string) => {
       return '学习中'
     case 'STABLE':
       return '已掌握'
+    case 'SUSPENDED':
+      return '已暂停'
     default:
       return '未知'
   }
@@ -174,12 +174,15 @@ const goToRecycleBin = () => {
     <!-- 工具栏 -->
     <div class="toolbar">
       <div class="toolbar-left">
-        <input
-          v-model="searchKeyword"
-          type="text"
-          class="search-input"
-          placeholder="搜索题名或ID..."
-        />
+        <div class="search-wrap">
+          <input
+            v-model="searchKeyword"
+            type="text"
+            class="search-input"
+            placeholder="搜索题号 / 题名 / 知识点（纯数字按 ID 精确）"
+          />
+          <button v-if="isSearching" class="search-clear" @click="clearSearch" title="清除">×</button>
+        </div>
         <select v-model="subjectFilter" class="subject-filter">
           <option value="ALL">全部科目</option>
           <option v-for="subject in subjects" :key="subject" :value="subject">
@@ -188,7 +191,7 @@ const goToRecycleBin = () => {
         </select>
         <select v-model="stateFilter" class="state-filter">
           <option value="ALL">全部状态</option>
-          <option v-for="s in states" :key="s" :value="s">{{ s }}</option>
+          <option v-for="s in STATE_OPTIONS" :key="s.value" :value="s.value">{{ s.label }}</option>
         </select>
       </div>
       <div class="toolbar-right">
@@ -199,6 +202,10 @@ const goToRecycleBin = () => {
           + 新建题目
         </button>
       </div>
+    </div>
+
+    <div v-if="errorMsg" class="error-bar">
+      {{ errorMsg }}
     </div>
 
     <!-- 题目列表 -->
@@ -274,6 +281,7 @@ const goToRecycleBin = () => {
   gap: 12px;
   flex: 1;
   flex-wrap: wrap;
+  align-items: center;
 }
 
 .toolbar-right {
@@ -281,21 +289,45 @@ const goToRecycleBin = () => {
   gap: 12px;
 }
 
-.search-input {
+.search-wrap {
+  position: relative;
   flex: 1;
-  min-width: 200px;
-  max-width: 300px;
-  padding: 10px 16px;
+  min-width: 240px;
+  max-width: 320px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 10px 32px 10px 16px;
   border: 1px solid #ddd;
   border-radius: 8px;
   background-color: #fff;
   color: #333;
   font-size: 14px;
+  box-sizing: border-box;
 }
 
 .search-input:focus {
   outline: none;
   border-color: #4CAF50;
+}
+
+.search-clear {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: none;
+  background: transparent;
+  font-size: 18px;
+  color: #999;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.search-clear:hover {
+  color: #333;
 }
 
 .subject-filter,
@@ -348,6 +380,16 @@ const goToRecycleBin = () => {
 
 .new-btn:hover {
   background-color: #45a049;
+}
+
+.error-bar {
+  margin-bottom: 16px;
+  padding: 10px 16px;
+  background-color: #fdecea;
+  color: #b71c1c;
+  border: 1px solid #f5c2c0;
+  border-radius: 6px;
+  font-size: 13px;
 }
 
 .questions-list {

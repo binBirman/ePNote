@@ -10,7 +10,7 @@ use crate::dao::meta_dao::MetaDao;
 use crate::dao::question_dao::QuestionDao;
 use crate::dao::review_dao::ReviewDao;
 use crate::dao::Connection;
-use crate::domain::enums::{QuestionState, ReviewResult};
+use crate::domain::enums::{MetaKey, QuestionState, ReviewResult, SystemMetaKey};
 use crate::domain::ids::QuestionId;
 use crate::domain::question::Question;
 use crate::domain::state_machine::QuestionStateMachine;
@@ -85,7 +85,6 @@ pub struct StateCounts {
     pub new_count: i64,
     pub learning_count: i64,
     pub stable_count: i64,
-    pub due_count: i64,
     pub suspended_count: i64,
 }
 
@@ -160,7 +159,8 @@ impl<'a> ReviewManager<'a> {
             .ok_or("question not found after update".to_string())
     }
 
-    /// 暂停题目
+    /// 暂停题目（任意非 SUSPENDED 状态 → SUSPENDED）。
+    /// 把原状态写入 `system.PreSuspendState` meta，恢复时还原。
     pub fn suspend(&self, question_id: QuestionId) -> Result<Question, String> {
         // 获取题目
         let question = self
@@ -174,13 +174,34 @@ impl<'a> ReviewManager<'a> {
             return Err("question already suspended".to_string());
         }
 
-        // 使用状态机暂停
+        // 1. 记下旧状态到 meta（先清掉可能残留的记录，避免叠加）
+        let pre_suspend_key = MetaKey::System(SystemMetaKey::PreSuspendState);
+        self.meta_dao
+            .delete_by_question_and_key(question_id, pre_suspend_key.clone())
+            .map_err(|e| format!("failed to clear pre-suspend meta: {}", e))?;
+        self.meta_dao
+            .insert(question_id, pre_suspend_key, question.state.as_str())
+            .map_err(|e| format!("failed to save pre-suspend state: {}", e))?;
+
+        // 2. 状态机暂停
         let transition = QuestionStateMachine::suspend(&question);
 
-        // 更新题目状态
+        // 3. 更新题目状态
         self.question_dao
             .update_state(question_id, transition.new_state)
             .map_err(|e| format!("failed to update state: {}", e))?;
+
+        // 4. 更新 due_at = None（SUSPENDED 状态）
+        self.question_dao
+            .update_review_fields(
+                question_id,
+                question.last_review_at,
+                question.last_result.as_ref().map(|r| r.as_str()),
+                transition.correct_streak,
+                transition.wrong_count,
+                transition.due_at,
+            )
+            .map_err(|e| format!("failed to update review fields: {}", e))?;
 
         // 返回更新后的题目
         self.question_dao
@@ -189,7 +210,8 @@ impl<'a> ReviewManager<'a> {
             .ok_or("question not found after update".to_string())
     }
 
-    /// 恢复题目
+    /// 恢复题目（SUSPENDED → 暂停前的状态，缺省回退 LEARNING）。
+    /// 恢复后清掉 `system.PreSuspendState` meta。
     pub fn recover(&self, question_id: QuestionId) -> Result<Question, String> {
         // 获取题目
         let question = self
@@ -203,17 +225,28 @@ impl<'a> ReviewManager<'a> {
             return Err("only suspended questions can be recovered".to_string());
         }
 
+        // 1. 读旧状态（缺省回退 LEARNING）
+        let pre_suspend_key = MetaKey::System(SystemMetaKey::PreSuspendState);
+        let key_str = pre_suspend_key.as_str();
+        let target_state = self
+            .meta_dao
+            .get_values_by_question_key(question_id, &key_str)
+            .map_err(|e| format!("failed to read pre-suspend state: {}", e))?
+            .first()
+            .and_then(|s| QuestionState::from_str(s))
+            .unwrap_or(QuestionState::LEARNING);
+
         let now = now_ts();
 
-        // 使用状态机恢复
-        let transition = QuestionStateMachine::recover(&question, now);
+        // 2. 状态机恢复
+        let transition = QuestionStateMachine::recover(&question, target_state, now);
 
-        // 更新题目状态
+        // 3. 更新题目状态
         self.question_dao
             .update_state(question_id, transition.new_state)
             .map_err(|e| format!("failed to update state: {}", e))?;
 
-        // 更新 due_at
+        // 4. 更新 review 字段（due_at = now）
         self.question_dao
             .update_review_fields(
                 question_id,
@@ -224,6 +257,11 @@ impl<'a> ReviewManager<'a> {
                 transition.due_at,
             )
             .map_err(|e| format!("failed to update review fields: {}", e))?;
+
+        // 5. 清掉 pre-suspend meta
+        self.meta_dao
+            .delete_by_question_and_key(question_id, pre_suspend_key)
+            .map_err(|e| format!("failed to clear pre-suspend meta: {}", e))?;
 
         // 返回更新后的题目
         self.question_dao
@@ -311,7 +349,7 @@ impl<'a> ReviewManager<'a> {
             }
         }
 
-        // 4. 到达建议复习时间的已掌握题目（DUE 状态）
+        // 4. 到达建议复习时间的题目（按 due_at 时间筛选，与 state 无关）
         if questions.len() < limit {
             if let Ok(due_questions) = self.question_dao.list_due_questions(now) {
                 for q in due_questions.into_iter().take(limit - questions.len()) {
@@ -338,38 +376,6 @@ impl<'a> ReviewManager<'a> {
             reasons,
             subject: subject.map(|s| s.to_string()),
         })
-    }
-
-    /// 检查并更新到期题目（从 STABLE 转移到 DUE）
-    pub fn check_and_update_due(&self) -> Result<Vec<Question>, String> {
-        let now = now_ts();
-        let mut updated = Vec::new();
-
-        // 查询所有 STABLE 状态的题目
-        if let Ok(stable_questions) = self.question_dao.list_by_state(QuestionState::STABLE) {
-            for q in stable_questions {
-                // 检查是否到期
-                if let Some(due_at) = q.due_at {
-                    if now >= due_at {
-                        // 状态转移 DUE
-                        if self.question_dao.update_state(q.id.clone(), QuestionState::DUE).is_ok() {
-                            updated.push(q);
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(updated)
-    }
-
-    /// 获取题目列表（待复习的题目）
-    #[deprecated(since = "0.1.0", note = "please use recommend() instead")]
-    pub fn get_due_questions(&self) -> Result<Vec<Question>, String> {
-        let now = now_ts();
-        self.question_dao
-            .list_due_questions(now)
-            .map_err(|e| format!("failed to get due questions: {}", e))
     }
 
     /// 获取所有科目列表
@@ -425,15 +431,12 @@ impl<'a> ReviewManager<'a> {
         let stable_count = self.question_dao
             .count_by_state("STABLE")
             .map_err(|e| format!("failed to count STABLE: {}", e))?;
-        let due_count = self.question_dao
-            .count_by_state("DUE")
-            .map_err(|e| format!("failed to count DUE: {}", e))?;
         let suspended_count = self.question_dao
             .count_by_state("SUSPENDED")
             .map_err(|e| format!("failed to count SUSPENDED: {}", e))?;
 
-        // 今日待复习数 = NEW + LEARNING + DUE
-        let today_pending = new_count + learning_count + due_count;
+        // 今日待复习数 = NEW + LEARNING
+        let today_pending = new_count + learning_count;
 
         Ok(StatsResult {
             total_questions,
@@ -446,7 +449,6 @@ impl<'a> ReviewManager<'a> {
                 new_count,
                 learning_count,
                 stable_count,
-                due_count,
                 suspended_count,
             },
             today_pending,
@@ -464,6 +466,30 @@ impl<'a> ReviewManager<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::connection::Connection;
+    use crate::db::migrate;
+    use crate::domain::ids::QuestionId;
+    use crate::util::time::now_ts;
+
+    fn setup() -> Connection {
+        let mut conn = Connection::open_in_memory().unwrap();
+        migrate(&mut conn).unwrap();
+        conn
+    }
+
+    fn insert_question(
+        conn: &Connection,
+        name: &str,
+        state: QuestionState,
+    ) -> QuestionId {
+        let now = now_ts();
+        conn.execute(
+            "INSERT INTO question (name, state, created_at) VALUES (?1, ?2, ?3)",
+            rusqlite::params![name, state.as_str(), now.as_i64()],
+        )
+        .unwrap();
+        QuestionId::from(conn.last_insert_rowid())
+    }
 
     #[test]
     fn test_recommend_reason_variants() {
@@ -473,5 +499,85 @@ mod tests {
         let _ = RecommendReason::FuzzyResult;
         let _ = RecommendReason::DueReview;
         let _ = RecommendReason::StaleReview;
+    }
+
+    #[test]
+    fn test_suspend_writes_pre_suspend_meta() {
+        let conn = setup();
+        let qid = insert_question(&conn, "题", QuestionState::STABLE);
+
+        let mgr = ReviewManager::new(&conn);
+        mgr.suspend(qid).unwrap();
+
+        // meta 应存 'STABLE'
+        let md = MetaDao::new(&conn);
+        let values =
+            md.get_values_by_question_key(qid, "system.PreSuspendState").unwrap();
+        assert_eq!(values, vec!["STABLE"]);
+
+        // 状态应是 SUSPENDED
+        let q = mgr.question_dao.get_by_id(qid).unwrap().unwrap();
+        assert_eq!(q.state, QuestionState::SUSPENDED);
+    }
+
+    #[test]
+    fn test_recover_restores_previous_state() {
+        let conn = setup();
+        let qid = insert_question(&conn, "题", QuestionState::STABLE);
+
+        let mgr = ReviewManager::new(&conn);
+        mgr.suspend(qid).unwrap();
+        let recovered = mgr.recover(qid).unwrap();
+        assert_eq!(recovered.state, QuestionState::STABLE);
+
+        // meta 已被清掉
+        let md = MetaDao::new(&conn);
+        let values =
+            md.get_values_by_question_key(qid, "system.PreSuspendState").unwrap();
+        assert!(values.is_empty(), "pre-suspend meta should be cleared after recover");
+
+        // due_at 应该是 now 附近
+        let q = mgr.question_dao.get_by_id(qid).unwrap().unwrap();
+        let now = now_ts();
+        let delta = (q.due_at.unwrap().as_i64() - now.as_i64()).abs();
+        assert!(delta < 5, "due_at should be close to now after recover, got delta={}", delta);
+    }
+
+    #[test]
+    fn test_recover_falls_back_to_learning_when_meta_missing() {
+        let conn = setup();
+        let qid = insert_question(&conn, "题", QuestionState::LEARNING);
+
+        // 直接把状态改成 SUSPENDED（模拟老库 / meta 缺失）
+        conn.execute(
+            "UPDATE question SET state = 'SUSPENDED' WHERE id = ?1",
+            rusqlite::params![i64::from(qid)],
+        )
+        .unwrap();
+
+        let mgr = ReviewManager::new(&conn);
+        let recovered = mgr.recover(qid).unwrap();
+        assert_eq!(recovered.state, QuestionState::LEARNING);
+    }
+
+    #[test]
+    fn test_double_suspend_errors() {
+        let conn = setup();
+        let qid = insert_question(&conn, "题", QuestionState::STABLE);
+
+        let mgr = ReviewManager::new(&conn);
+        mgr.suspend(qid).unwrap();
+        let err = mgr.suspend(qid).unwrap_err();
+        assert!(err.contains("already suspended"), "got: {}", err);
+    }
+
+    #[test]
+    fn test_recover_non_suspended_errors() {
+        let conn = setup();
+        let qid = insert_question(&conn, "题", QuestionState::STABLE);
+
+        let mgr = ReviewManager::new(&conn);
+        let err = mgr.recover(qid).unwrap_err();
+        assert!(err.contains("only suspended"), "got: {}", err);
     }
 }

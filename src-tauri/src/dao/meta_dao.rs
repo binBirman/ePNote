@@ -85,6 +85,16 @@ impl<'a> MetaDao<'a> {
         Ok(values)
     }
 
+    /// 批量按 `question_id` 列表取某个 key 的所有值；返回 `HashMap<question_id, Vec<value>>`。
+    /// `qids` 为空时返回空 HashMap，避免无意义的 SQL。
+    pub fn list_values_by_question_ids(
+        &self,
+        qids: &[i64],
+        key: &str,
+    ) -> Result<std::collections::HashMap<i64, Vec<String>>, DbError> {
+        crate::db::select_meta_values_by_question_ids(self.conn, qids, key)
+    }
+
     /// 查询所有不重复的科目值。
     pub fn list_all_subjects(&self) -> Result<Vec<String>, DbError> {
         crate::db::select_distinct_values_by_key(self.conn, SUBJECT_META_KEY)

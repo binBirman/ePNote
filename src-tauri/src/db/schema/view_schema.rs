@@ -14,7 +14,21 @@ pub struct ViewRow {
     pub last_reviewed_at: Option<i64>,
 }
 
-/* 输出所有科目 */
+const KP_META_KEY: &str = "system.KnowledgePoint";
+
+fn row_from(row: &rusqlite::Row<'_>) -> rusqlite::Result<ViewRow> {
+    Ok(ViewRow {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        state: row.get(2)?,
+        created_at: row.get(3)?,
+        deleted_at: row.get(4)?,
+        subject: row.get(5)?,
+        last_reviewed_at: row.get(6)?,
+    })
+}
+
+/// 列出所有不重复的科目（来自 `show_view`，过滤空值）。
 pub fn select_all_subjects(conn: &Connection) -> Result<Vec<String>, DbError> {
     let mut stmt = conn.prepare(
         r#"
@@ -38,13 +52,7 @@ pub fn select_all_subjects(conn: &Connection) -> Result<Vec<String>, DbError> {
     Ok(subjects)
 }
 
-/*
-    用ID查找题目视图
-    输入：
-        id: 题目ID，必填
-    输出：
-        若找到，返回Some(ViewRow)
-*/
+/// 用 ID 查找题目视图（包含已删除题目）。
 pub fn select_view_by_id(conn: &Connection, id: i64) -> Result<ViewRow, DbError> {
     let mut stmt = conn.prepare(
         r#"
@@ -54,32 +62,15 @@ pub fn select_view_by_id(conn: &Connection, id: i64) -> Result<ViewRow, DbError>
         "#,
     )?;
 
-    let question_iter = stmt.query_map((id,), |row| {
-        Ok(ViewRow {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            state: row.get(2)?,
-            created_at: row.get(3)?,
-            deleted_at: row.get(4)?,
-            subject: row.get(5)?,
-            last_reviewed_at: row.get(6)?,
-        })
-    })?;
-
-    for question in question_iter {
-        return Ok(question?);
+    let mut rows = stmt.query((id,))?;
+    if let Some(row) = rows.next()? {
+        Ok(row_from(row)?)
+    } else {
+        Err(DbError::NotFound)
     }
-
-    Err(DbError::NotFound)
 }
 
-/*
-    用名称查找题目
-    输入：
-        name: 题目名称，必填
-    输出：
-        若找到，返回Some(ViewRow)
-*/
+/// 按名称精确查找题目视图（多个共享同一名称时返回多条）。
 pub fn select_views_by_name(conn: &Connection, name: &str) -> Result<Vec<ViewRow>, DbError> {
     let mut stmt = conn.prepare(
         r#"
@@ -89,158 +80,17 @@ pub fn select_views_by_name(conn: &Connection, name: &str) -> Result<Vec<ViewRow
         "#,
     )?;
 
-    let question_iter = stmt.query_map((name,), |row| {
-        Ok(ViewRow {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            state: row.get(2)?,
-            created_at: row.get(3)?,
-            deleted_at: row.get(4)?,
-            subject: row.get(5)?,
-            last_reviewed_at: row.get(6)?,
-        })
-    })?;
+    let iter = stmt.query_map((name,), row_from)?;
+    let rows: Vec<ViewRow> = iter.collect::<Result<_, _>>()?;
 
-    let mut results = Vec::new();
-    for question in question_iter {
-        results.push(question?);
-    }
-
-    if results.is_empty() {
+    if rows.is_empty() {
         Err(DbError::NotFound)
     } else {
-        Ok(results)
+        Ok(rows)
     }
 }
 
-/*
-    分页列出未删除题目视图
-    输入：
-        limit: 每页记录数
-        offset: 偏移量
-    输出：
-        返回未删除题目视图列表
-*/
-/// 分页列出未删除题目视图
-/// 参数顺序为 `(offset, limit)` 以配合上层 DAO 的调用习惯；内部按 SQL 需要传入 `(limit, offset)`。
-pub fn select_views_page(
-    conn: &Connection,
-    offset: i64,
-    limit: i64,
-) -> Result<Vec<ViewRow>, DbError> {
-    let mut stmt = conn.prepare(
-        r#"
-        SELECT id, name, state, created_at, deleted_at, subject, last_reviewed_at
-        FROM show_view
-        WHERE deleted_at IS NULL
-        ORDER BY created_at DESC
-        LIMIT ?1 OFFSET ?2
-        "#,
-    )?;
-
-    let iter = stmt.query_map((limit, offset), |row| {
-        Ok(ViewRow {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            state: row.get(2)?,
-            created_at: row.get(3)?,
-            deleted_at: row.get(4)?,
-            subject: row.get(5)?,
-            last_reviewed_at: row.get(6)?,
-        })
-    })?;
-
-    iter.collect::<Result<Vec<_>, _>>().map_err(Into::into)
-}
-
-/*
-    分页列出特定状态未删除题目视图
-    输入：
-        offset: 偏移量
-        limit: 每页记录数
-        state: 题目状态
-    输出：
-        返回未删除题目视图列表
-*/
-pub fn select_views_page_by_state(
-    conn: &Connection,
-    offset: i64,
-    limit: i64,
-    state: &str,
-) -> Result<Vec<ViewRow>, DbError> {
-    let mut stmt = conn.prepare(
-        r#"
-        SELECT id, name, state, created_at, deleted_at, subject, last_reviewed_at
-        FROM show_view
-        WHERE deleted_at IS NULL AND state = ?3
-        ORDER BY created_at DESC
-        LIMIT ?1 OFFSET ?2
-        "#,
-    )?;
-
-    let iter = stmt.query_map((limit, offset, state), |row| {
-        Ok(ViewRow {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            state: row.get(2)?,
-            created_at: row.get(3)?,
-            deleted_at: row.get(4)?,
-            subject: row.get(5)?,
-            last_reviewed_at: row.get(6)?,
-        })
-    })?;
-
-    iter.collect::<Result<Vec<_>, _>>().map_err(Into::into)
-}
-
-/*
-    分页列出特定科目未删除题目视图
-    输入：
-        offset: 偏移量
-        limit: 每页记录数
-        subject：题目科目
-    输出：
-        返回未删除题目视图列表
-*/
-pub fn select_views_page_by_subject(
-    conn: &Connection,
-    offset: i64,
-    limit: i64,
-    subject: &str,
-) -> Result<Vec<ViewRow>, DbError> {
-    let mut stmt = conn.prepare(
-        r#"
-        SELECT id, name, state, created_at, deleted_at, subject, last_reviewed_at
-        FROM show_view
-        WHERE deleted_at IS NULL AND subject = ?3
-        ORDER BY created_at DESC
-        LIMIT ?1 OFFSET ?2
-        "#,
-    )?;
-
-    let iter = stmt.query_map((limit, offset, subject), |row| {
-        Ok(ViewRow {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            state: row.get(2)?,
-            created_at: row.get(3)?,
-            deleted_at: row.get(4)?,
-            subject: row.get(5)?,
-            last_reviewed_at: row.get(6)?,
-        })
-    })?;
-
-    iter.collect::<Result<Vec<_>, _>>().map_err(Into::into)
-}
-
-/*
-    分页列出已删除题目视图
-    输入：
-        offset: 偏移量
-        limit: 每页记录数
-    输出：
-        返回已删除题目视图列表
-*/
+/// 分页列出已删除题目视图。
 pub fn select_deleted_views_page(
     conn: &Connection,
     offset: i64,
@@ -256,171 +106,140 @@ pub fn select_deleted_views_page(
         "#,
     )?;
 
-    let iter = stmt.query_map((limit, offset), |row| {
-        Ok(ViewRow {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            state: row.get(2)?,
-            created_at: row.get(3)?,
-            deleted_at: row.get(4)?,
-            subject: row.get(5)?,
-            last_reviewed_at: row.get(6)?,
-        })
-    })?;
-
+    let iter = stmt.query_map((limit, offset), row_from)?;
     iter.collect::<Result<Vec<_>, _>>().map_err(Into::into)
 }
 
-pub fn select_views_page_by_subject_and_state(
+/// 分类查询：按 `subject` 与 `state` 过滤未删除题目，两者均可选。
+///
+/// 0-indexed 分页：`offset = page * page_size`。
+pub fn select_views_classified(
     conn: &Connection,
-    offset: i64,
-    limit: i64,
-    subject: &str,
-    state: &str,
-) -> Result<Vec<ViewRow>, DbError> {
-    let mut stmt = conn.prepare(
-        r#"
-        SELECT id, name, state, created_at, deleted_at, subject, last_reviewed_at
-        FROM show_view
-        WHERE deleted_at IS NULL AND subject = ?3 AND state = ?4
-        ORDER BY created_at DESC
-        LIMIT ?1 OFFSET ?2
-        "#,
-    )?;
-
-    let iter = stmt.query_map((limit, offset, subject, state), |row| {
-        Ok(ViewRow {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            state: row.get(2)?,
-            created_at: row.get(3)?,
-            deleted_at: row.get(4)?,
-            subject: row.get(5)?,
-            last_reviewed_at: row.get(6)?,
-        })
-    })?;
-
-    iter.collect::<Result<Vec<_>, _>>().map_err(Into::into)
-}
-
-/*
-    按关键字搜索题目（支持题目名、科目、知识点）
-    输入：
-        offset: 偏移量
-        limit: 限制数量
-        keyword: 搜索关键字
-    输出：
-        返回匹配的题目列表
-*/
-pub fn select_views_page_by_keyword(
-    conn: &Connection,
-    offset: i64,
-    limit: i64,
-    keyword: &str,
-) -> Result<Vec<ViewRow>, DbError> {
-    let keyword_pattern = format!("%{}%", keyword);
-    let mut stmt = conn.prepare(
-        r#"
-        SELECT id, name, state, created_at, deleted_at, subject, last_reviewed_at
-        FROM show_view
-        WHERE deleted_at IS NULL
-          AND (name LIKE ?3 OR subject LIKE ?3 OR knowledge_points LIKE ?3)
-        ORDER BY created_at DESC
-        LIMIT ?1 OFFSET ?2
-        "#,
-    )?;
-
-    let iter = stmt.query_map((limit, offset, keyword_pattern), |row| {
-        Ok(ViewRow {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            state: row.get(2)?,
-            created_at: row.get(3)?,
-            deleted_at: row.get(4)?,
-            subject: row.get(5)?,
-            last_reviewed_at: row.get(6)?,
-        })
-    })?;
-
-    iter.collect::<Result<Vec<_>, _>>().map_err(Into::into)
-}
-
-/*
-    按关键字、科目、状态搜索题目
-    输入：
-        offset: 偏移量
-        limit: 限制数量
-        keyword: 搜索关键字（可选）
-        subject: 科目筛选（可选）
-        state: 状态筛选（可选）
-    输出：
-        返回匹配的题目列表
-*/
-pub fn select_views_page_with_filters(
-    conn: &Connection,
-    offset: i64,
-    limit: i64,
-    keyword: Option<&str>,
     subject: Option<&str>,
     state: Option<&str>,
+    limit: i64,
+    offset: i64,
 ) -> Result<Vec<ViewRow>, DbError> {
-    // 构建动态 WHERE 子句
-    let mut conditions = vec!["deleted_at IS NULL".to_string()];
-    let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+    let subject_present = subject.is_some();
+    let state_present = state.is_some();
 
-    if keyword.is_some() {
-        conditions.push("(name LIKE ? OR subject LIKE ? OR knowledge_points LIKE ?)".to_string());
-    }
-    if subject.is_some() {
-        conditions.push("subject = ?".to_string());
-    }
-    if state.is_some() {
-        conditions.push("state = ?".to_string());
-    }
-
-    let where_clause = conditions.join(" AND ");
-    let sql = format!(
-        r#"
-        SELECT id, name, state, created_at, deleted_at, subject, last_reviewed_at
-        FROM show_view
-        WHERE {}
-        ORDER BY created_at DESC
-        LIMIT ?1 OFFSET ?2
-        "#,
-        where_clause
+    let mut sql = String::from(
+        "SELECT id, name, state, created_at, deleted_at, subject, last_reviewed_at \
+         FROM show_view \
+         WHERE deleted_at IS NULL",
     );
-
-    // 构建参数列表：limit, offset, 然后是其他参数
-    let mut all_params: Vec<Box<dyn rusqlite::ToSql>> = vec![Box::new(limit), Box::new(offset)];
-
-    if let Some(kw) = keyword {
-        let pattern = format!("%{}%", kw);
-        all_params.push(Box::new(pattern.clone()));
-        all_params.push(Box::new(pattern.clone()));
-        all_params.push(Box::new(pattern));
+    if subject_present {
+        sql.push_str(" AND subject = ?");
     }
-    if let Some(subj) = subject {
-        all_params.push(Box::new(subj.to_string()));
+    if state_present {
+        sql.push_str(" AND state = ?");
     }
-    if let Some(st) = state {
-        all_params.push(Box::new(st.to_string()));
-    }
+    sql.push_str(" ORDER BY created_at DESC LIMIT ? OFFSET ?");
 
     let mut stmt = conn.prepare(&sql)?;
 
-    let param_refs: Vec<&dyn rusqlite::ToSql> = all_params.iter().map(|p| p.as_ref()).collect();
+    // 用具体类型让 rusqlite 能正确绑定 NULL
+    let subject_param: Option<String> = subject.map(String::from);
+    let state_param: Option<String> = state.map(String::from);
 
-    let iter = stmt.query_map(param_refs.as_slice(), |row| {
-        Ok(ViewRow {
-            id: row.get(0)?,
-            name: row.get(1)?,
-            state: row.get(2)?,
-            created_at: row.get(3)?,
-            deleted_at: row.get(4)?,
-            subject: row.get(5)?,
-            last_reviewed_at: row.get(6)?,
-        })
-    })?;
+    // 占位符顺序：subject?, state?, limit, offset
+    let iter = match (subject_present, state_present) {
+        (true, true) => stmt.query_map(
+            rusqlite::params![subject_param, state_param, limit, offset],
+            row_from,
+        )?,
+        (true, false) => stmt.query_map(
+            rusqlite::params![subject_param, limit, offset],
+            row_from,
+        )?,
+        (false, true) => stmt.query_map(
+            rusqlite::params![state_param, limit, offset],
+            row_from,
+        )?,
+        (false, false) => stmt.query_map(rusqlite::params![limit, offset], row_from)?,
+    };
+
+    iter.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+}
+
+/// 按 ID 精确查找未删除题目，返回 `Option`（找不到/已删除都给 None）。
+pub fn select_view_active_by_id(
+    conn: &Connection,
+    id: i64,
+) -> Result<Option<ViewRow>, DbError> {
+    let mut stmt = conn.prepare(
+        r#"
+        SELECT id, name, state, created_at, deleted_at, subject, last_reviewed_at
+        FROM show_view
+        WHERE deleted_at IS NULL AND id = ?1
+        "#,
+    )?;
+
+    let mut rows = stmt.query((id,))?;
+    if let Some(row) = rows.next()? {
+        Ok(Some(row_from(row)?))
+    } else {
+        Ok(None)
+    }
+}
+
+/// 模糊搜索：`pattern` 必须已经包含 `%` 通配符。
+/// 匹配 `name` 或知识点（`meta.key = 'system.KnowledgePoint'` 的 `value`），用 EXISTS 子查询。
+/// 可叠加 `subject` / `state` 过滤（Mode B）。
+pub fn select_views_search_fuzzy(
+    conn: &Connection,
+    pattern: &str,
+    subject: Option<&str>,
+    state: Option<&str>,
+    limit: i64,
+    offset: i64,
+) -> Result<Vec<ViewRow>, DbError> {
+    let subject_present = subject.is_some();
+    let state_present = state.is_some();
+
+    let mut sql = String::from(
+        "SELECT v.id, v.name, v.state, v.created_at, v.deleted_at, v.subject, v.last_reviewed_at \
+         FROM show_view v \
+         WHERE v.deleted_at IS NULL \
+           AND (v.name LIKE ? \
+             OR EXISTS (SELECT 1 FROM meta m \
+                        WHERE m.question_id = v.id \
+                          AND m.key = '",
+    );
+    sql.push_str(KP_META_KEY);
+    sql.push_str("' AND m.value LIKE ?))");
+    if subject_present {
+        sql.push_str(" AND v.subject = ?");
+    }
+    if state_present {
+        sql.push_str(" AND v.state = ?");
+    }
+    sql.push_str(" ORDER BY v.created_at DESC LIMIT ? OFFSET ?");
+
+    let mut stmt = conn.prepare(&sql)?;
+
+    let subject_param: Option<String> = subject.map(String::from);
+    let state_param: Option<String> = state.map(String::from);
+
+    // 占位符顺序：pattern(name), pattern(kp), subject?, state?, limit, offset
+    let iter = match (subject_present, state_present) {
+        (true, true) => stmt.query_map(
+            rusqlite::params![pattern, pattern, subject_param, state_param, limit, offset],
+            row_from,
+        )?,
+        (true, false) => stmt.query_map(
+            rusqlite::params![pattern, pattern, subject_param, limit, offset],
+            row_from,
+        )?,
+        (false, true) => stmt.query_map(
+            rusqlite::params![pattern, pattern, state_param, limit, offset],
+            row_from,
+        )?,
+        (false, false) => stmt.query_map(
+            rusqlite::params![pattern, pattern, limit, offset],
+            row_from,
+        )?,
+    };
 
     iter.collect::<Result<Vec<_>, _>>().map_err(Into::into)
 }

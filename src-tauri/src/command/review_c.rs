@@ -167,7 +167,6 @@ pub struct StateCountsData {
     pub new_count: i64,
     pub learning_count: i64,
     pub stable_count: i64,
-    pub due_count: i64,
     pub suspended_count: i64,
 }
 
@@ -204,7 +203,6 @@ pub fn get_stats_comm(
             new_count: stats.state_counts.new_count,
             learning_count: stats.state_counts.learning_count,
             stable_count: stats.state_counts.stable_count,
-            due_count: stats.state_counts.due_count,
             suspended_count: stats.state_counts.suspended_count,
         },
         today_pending: stats.today_pending,

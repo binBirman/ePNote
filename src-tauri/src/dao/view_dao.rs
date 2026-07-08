@@ -1,10 +1,8 @@
 use crate::dao::meta_dao::MetaDao;
-use crate::db::connection;
 use crate::db::error::DbError;
 use crate::db::schema::view_schema::{
-    select_deleted_views_page, select_view_by_id, select_views_by_name, select_views_page,
-    select_views_page_by_state, select_views_page_by_subject,
-    select_views_page_by_subject_and_state, select_views_page_with_filters,
+    select_deleted_views_page, select_view_active_by_id, select_view_by_id, select_views_by_name,
+    select_views_classified, select_views_search_fuzzy,
 };
 use crate::domain::enums::QuestionState;
 use crate::domain::ids::QuestionId;
@@ -14,10 +12,11 @@ use rusqlite::Connection;
 use std::convert::TryFrom;
 
 /// DAO for `Question` using the lightweight `db` schema functions and repo converters.
-
 pub struct ViewDao<'a> {
     conn: &'a Connection,
 }
+
+const KP_META_KEY: &str = "system.KnowledgePoint";
 
 impl<'a> ViewDao<'a> {
     pub fn new(conn: &'a Connection) -> Self {
@@ -29,231 +28,100 @@ impl<'a> ViewDao<'a> {
         let id_i64: i64 = i64::from(id);
         let row = select_view_by_id(self.conn, id_i64)?;
         let md = MetaDao::new(self.conn);
-        let knowledge_points = md.get_values_by_question_key(id, "system.KnowledgePoint")?;
-
-        let state = QuestionState::try_from(row.state.clone())
-            .map_err(|e| DbError::Migration(format!("convert error: {:?}", e)))?;
-        let view = View {
-            id: QuestionId::from(row.id),
-            name: row.name.clone(),
-            state,
-            created_at: Timestamp::from(row.created_at),
-            deleted_at: row.deleted_at.map(Timestamp::from),
-            subject: row.subject.clone().unwrap_or_default(),
-            knowledge_points,
-            last_reviewed_at: Timestamp::from(row.last_reviewed_at.unwrap_or(0)),
-        };
-
-        Ok(view)
+        let knowledge_points = md.get_values_by_question_key(id, KP_META_KEY)?;
+        view_from_row(row, &knowledge_points)
     }
 
-    /// 根据领域层 `QuestionName` 查询题目，找不到返回 `Ok(None)`。
+    /// 根据名称精确匹配题目。
     pub fn get_by_name(&self, name: &str) -> Result<Vec<View>, DbError> {
-        // `select_views_by_name` now returns a vector of rows (or Err if not found).
         let rows = select_views_by_name(self.conn, name)?;
         let md = MetaDao::new(self.conn);
         let mut views = Vec::new();
         for row in rows {
             let knowledge_points =
-                md.get_values_by_question_key(QuestionId::from(row.id), "system.KnowledgePoint")?;
-            let state = QuestionState::try_from(row.state.clone())
-                .map_err(|e| DbError::Migration(format!("convert error: {:?}", e)))?;
-            views.push(View {
-                id: QuestionId::from(row.id),
-                name: row.name.clone(),
-                state,
-                created_at: Timestamp::from(row.created_at),
-                deleted_at: row.deleted_at.map(Timestamp::from),
-                subject: row.subject.clone().unwrap_or_default(),
-                knowledge_points,
-                last_reviewed_at: Timestamp::from(row.last_reviewed_at.unwrap_or(0)),
-            });
-        }
-
-        Ok(views)
-    }
-
-    /// 分页输出题目列表（不包含已删除题目）。
-    pub fn list(&self, offset: i64, limit: i64) -> Result<Vec<View>, DbError> {
-        let rows = select_views_page(self.conn, offset, limit)?;
-        let md = MetaDao::new(self.conn);
-        let mut views = Vec::new();
-        for row in rows {
-            let state = QuestionState::try_from(row.state.clone())
-                .map_err(|e| DbError::Migration(format!("convert error: {:?}", e)))?;
-            let knowledge_points =
-                md.get_values_by_question_key(QuestionId::from(row.id), "system.KnowledgePoint")?;
-            views.push(View {
-                id: QuestionId::from(row.id),
-                name: row.name.clone(),
-                state,
-                created_at: Timestamp::from(row.created_at),
-                deleted_at: row.deleted_at.map(Timestamp::from),
-                subject: row.subject.clone().unwrap_or_default(),
-                knowledge_points,
-                last_reviewed_at: Timestamp::from(row.last_reviewed_at.unwrap_or(0)),
-            });
+                md.get_values_by_question_key(QuestionId::from(row.id), KP_META_KEY)?;
+            views.push(view_from_row(row, &knowledge_points)?);
         }
         Ok(views)
     }
 
-    /// 分页输已删除出题目列表。
+    /// 分页输出已删除题目。
     pub fn list_deleted(&self, offset: i64, limit: i64) -> Result<Vec<View>, DbError> {
         let rows = select_deleted_views_page(self.conn, offset, limit)?;
-        let md = MetaDao::new(self.conn);
-        let mut views = Vec::new();
-        for row in rows {
-            let state = QuestionState::try_from(row.state.clone())
-                .map_err(|e| DbError::Migration(format!("convert error: {:?}", e)))?;
-            let knowledge_points =
-                md.get_values_by_question_key(QuestionId::from(row.id), "system.KnowledgePoint")?;
-            views.push(View {
-                id: QuestionId::from(row.id),
-                name: row.name.clone(),
-                state,
-                created_at: Timestamp::from(row.created_at),
-                deleted_at: row.deleted_at.map(Timestamp::from),
-                subject: row.subject.clone().unwrap_or_default(),
-                knowledge_points,
-                last_reviewed_at: Timestamp::from(row.last_reviewed_at.unwrap_or(0)),
-            });
-        }
-        Ok(views)
+        self.attach_kps(rows)
     }
 
-    /// 分页提取某状态的题目列表（不包含已删除题目）。
-    pub fn list_by_state(
+    /// 分类查询：`subject` 和 `state` 都可选；同时为 `None` 时返回全部分页结果。
+    pub fn list_classified(
         &self,
-        state: &str,
-        offset: i64,
-        limit: i64,
-    ) -> Result<Vec<View>, DbError> {
-        let rows = select_views_page_by_state(self.conn, offset, limit, state)?;
-        let md = MetaDao::new(self.conn);
-        let mut views = Vec::new();
-        for row in rows {
-            let st = QuestionState::try_from(row.state.clone())
-                .map_err(|e| DbError::Migration(format!("convert error: {:?}", e)))?;
-            let knowledge_points =
-                md.get_values_by_question_key(QuestionId::from(row.id), "system.KnowledgePoint")?;
-            views.push(View {
-                id: QuestionId::from(row.id),
-                name: row.name.clone(),
-                state: st,
-                created_at: Timestamp::from(row.created_at),
-                deleted_at: row.deleted_at.map(Timestamp::from),
-                subject: row.subject.clone().unwrap_or_default(),
-                knowledge_points,
-                last_reviewed_at: Timestamp::from(row.last_reviewed_at.unwrap_or(0)),
-            });
-        }
-        if views.is_empty() {
-            Err(DbError::NotFound)
-        } else {
-            Ok(views)
-        }
-    }
-
-    /// 分页提取某科目的所有题目视图列表（不包含已删除题目）
-    pub fn list_by_subject(
-        &self,
-        subject: &str,
-        offset: i64,
-        limit: i64,
-    ) -> Result<Vec<View>, DbError> {
-        // 返回全部匹配 subject 的视图（不分页）
-        let rows = select_views_page_by_subject(self.conn, offset, limit, subject)?;
-        let md = MetaDao::new(self.conn);
-        let mut views = Vec::new();
-        for row in rows {
-            let st = QuestionState::try_from(row.state.clone())
-                .map_err(|e| DbError::Migration(format!("convert error: {:?}", e)))?;
-            let knowledge_points =
-                md.get_values_by_question_key(QuestionId::from(row.id), "system.KnowledgePoint")?;
-            views.push(View {
-                id: QuestionId::from(row.id),
-                name: row.name.clone(),
-                state: st,
-                created_at: Timestamp::from(row.created_at),
-                deleted_at: row.deleted_at.map(Timestamp::from),
-                subject: row.subject.clone().unwrap_or_default(),
-                knowledge_points,
-                last_reviewed_at: Timestamp::from(row.last_reviewed_at.unwrap_or(0)),
-            });
-        }
-        if views.is_empty() {
-            Err(DbError::NotFound)
-        } else {
-            Ok(views)
-        }
-    }
-
-    /// 分页提取某科目和某状态的所有题目视图列表（不包含已删除题目）
-    pub fn list_by_subject_and_state(
-        &self,
-        subject: &str,
-        state: &str,
-        offset: i64,
-        limit: i64,
-    ) -> Result<Vec<View>, DbError> {
-        let rows =
-            select_views_page_by_subject_and_state(self.conn, offset, limit, subject, state)?;
-        let md = MetaDao::new(self.conn);
-        let mut views = Vec::new();
-        for row in rows {
-            let st = QuestionState::try_from(row.state.clone())
-                .map_err(|e| DbError::Migration(format!("convert error: {:?}", e)))?;
-            let knowledge_points =
-                md.get_values_by_question_key(QuestionId::from(row.id), "system.KnowledgePoint")?;
-            views.push(View {
-                id: QuestionId::from(row.id),
-                name: row.name.clone(),
-                state: st,
-                created_at: Timestamp::from(row.created_at),
-                deleted_at: row.deleted_at.map(Timestamp::from),
-                subject: row.subject.clone().unwrap_or_default(),
-                knowledge_points,
-                last_reviewed_at: Timestamp::from(row.last_reviewed_at.unwrap_or(0)),
-            });
-        }
-        Ok(views)
-    }
-
-    /// 按关键字、科目、状态搜索题目（综合筛选）
-    pub fn list_with_filters(
-        &self,
-        keyword: Option<&str>,
         subject: Option<&str>,
         state: Option<&str>,
         offset: i64,
         limit: i64,
     ) -> Result<Vec<View>, DbError> {
-        let rows = select_views_page_with_filters(
-            self.conn,
-            offset,
-            limit,
-            keyword,
-            subject,
-            state,
-        )?;
-        let md = MetaDao::new(self.conn);
-        let mut views = Vec::new();
-        for row in rows {
-            let st = QuestionState::try_from(row.state.clone())
-                .map_err(|e| DbError::Migration(format!("convert error: {:?}", e)))?;
-            let knowledge_points =
-                md.get_values_by_question_key(QuestionId::from(row.id), "system.KnowledgePoint")?;
-            views.push(View {
-                id: QuestionId::from(row.id),
-                name: row.name.clone(),
-                state: st,
-                created_at: Timestamp::from(row.created_at),
-                deleted_at: row.deleted_at.map(Timestamp::from),
-                subject: row.subject.clone().unwrap_or_default(),
-                knowledge_points,
-                last_reviewed_at: Timestamp::from(row.last_reviewed_at.unwrap_or(0)),
-            });
-        }
-        Ok(views)
+        let rows = select_views_classified(self.conn, subject, state, limit, offset)?;
+        self.attach_kps(rows)
     }
+
+    /// 按 ID 精确搜索未删除题目，返回 0 或 1 条。
+    pub fn search_by_id(&self, id: i64) -> Result<Option<View>, DbError> {
+        let Some(row) = select_view_active_by_id(self.conn, id)? else {
+            return Ok(None);
+        };
+        let md = MetaDao::new(self.conn);
+        let kps = md.get_values_by_question_key(QuestionId::from(row.id), KP_META_KEY)?;
+        Ok(Some(view_from_row(row, &kps)?))
+    }
+
+    /// 模糊搜索：`query` 任意字符串，按 `%query%` 匹配 `name` 或知识点；
+    /// 可叠加 `subject` / `state` 过滤（Mode B）。
+    pub fn search_fuzzy(
+        &self,
+        query: &str,
+        subject: Option<&str>,
+        state: Option<&str>,
+        offset: i64,
+        limit: i64,
+    ) -> Result<Vec<View>, DbError> {
+        let pattern = format!("%{}%", query);
+        let rows = select_views_search_fuzzy(self.conn, &pattern, subject, state, limit, offset)?;
+        self.attach_kps(rows)
+    }
+
+    /// 批量为 `ViewRow` 列表补充 `knowledge_points`，避免 N+1。
+    fn attach_kps(
+        &self,
+        rows: Vec<crate::db::schema::view_schema::ViewRow>,
+    ) -> Result<Vec<View>, DbError> {
+        if rows.is_empty() {
+            return Ok(Vec::new());
+        }
+        let qids: Vec<i64> = rows.iter().map(|r| r.id).collect();
+        let md = MetaDao::new(self.conn);
+        let mut kp_map = md.list_values_by_question_ids(&qids, KP_META_KEY)?;
+        let mut out = Vec::with_capacity(rows.len());
+        for row in rows {
+            let kps = kp_map.remove(&row.id).unwrap_or_default();
+            out.push(view_from_row(row, &kps)?);
+        }
+        Ok(out)
+    }
+}
+
+fn view_from_row(
+    row: crate::db::schema::view_schema::ViewRow,
+    knowledge_points: &[String],
+) -> Result<View, DbError> {
+    let state = QuestionState::try_from(row.state.clone())
+        .map_err(|e| DbError::Migration(format!("convert error: {:?}", e)))?;
+    Ok(View {
+        id: QuestionId::from(row.id),
+        name: row.name.clone(),
+        state,
+        created_at: Timestamp::from(row.created_at),
+        deleted_at: row.deleted_at.map(Timestamp::from),
+        subject: row.subject.clone().unwrap_or_default(),
+        knowledge_points: knowledge_points.to_vec(),
+        last_reviewed_at: Timestamp::from(row.last_reviewed_at.unwrap_or(0)),
+    })
 }

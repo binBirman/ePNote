@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { getQuestionData, deleteQuestion, updateQuestion, getImageBase64, addQuestionImages, deleteQuestionImage, updateImageSortOrder } from '@/api/question'
+import { suspendQuestion, recoverQuestion } from '@/api/review'
 import type { QuestionInfo, QuestionImage } from '@/types/question'
 import type { QuestionState } from '@/types/question'
 import { open } from "@tauri-apps/plugin-dialog";
@@ -20,8 +21,11 @@ const question = ref<QuestionInfo | null>(null)
 const isLoading = ref(true)
 const isDeleting = ref(false)
 const isEditing = ref(false)
+const isTogglingSuspend = ref(false)
 const error = ref<string | null>(null)
 const answerVisible = ref(false)
+
+const isSuspended = computed(() => question.value?.state === 'SUSPENDED')
 
 // 图片 base64 数据
 const questionImages = ref<ImageItem[]>([])
@@ -131,8 +135,6 @@ const getStateColor = (state: QuestionState) => {
       return '#FF9800'
     case 'STABLE':
       return '#4CAF50'
-    case 'DUE':
-      return '#9C27B0'
     case 'SUSPENDED':
       return '#607D8B'
     default:
@@ -148,8 +150,6 @@ const getStateLabel = (state: QuestionState) => {
       return '学习中'
     case 'STABLE':
       return '已掌握'
-    case 'DUE':
-      return '待复习'
     case 'SUSPENDED':
       return '暂停'
     default:
@@ -167,6 +167,29 @@ const handleEdit = () => {
     knowledge_points: question.value.knowledge_points || [],
   }
   isEditing.value = true
+}
+
+const handleToggleSuspend = async () => {
+  if (!question.value) return
+  isTogglingSuspend.value = true
+  error.value = null
+  try {
+    if (isSuspended.value) {
+      await recoverQuestion(question.value.id)
+    } else {
+      await suspendQuestion(question.value.id)
+    }
+    // 重新拉取最新题目（状态、due_at 等都变了）
+    const updated = await getQuestionData(question.value.id)
+    if (updated) {
+      question.value = updated
+    }
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : (isSuspended.value ? '恢复失败' : '暂停失败')
+    console.error('Toggle suspend failed:', e)
+  } finally {
+    isTogglingSuspend.value = false
+  }
 }
 
 // 预览大图
@@ -537,12 +560,22 @@ const goBack = () => {
         <!-- 题目标题和状态 -->
         <div class="detail-header">
           <h1 class="question-title">{{ question.name || '未命名题目' }}</h1>
-          <span
-            class="state-badge large"
-            :style="{ backgroundColor: getStateColor(question.state as QuestionState) }"
-          >
-            {{ getStateLabel(question.state as QuestionState) }}
-          </span>
+          <div class="header-actions">
+            <span
+              class="state-badge large"
+              :style="{ backgroundColor: getStateColor(question.state as QuestionState) }"
+            >
+              {{ getStateLabel(question.state as QuestionState) }}
+            </span>
+            <button
+              class="suspend-btn"
+              :class="{ suspended: isSuspended }"
+              :disabled="isTogglingSuspend"
+              @click="handleToggleSuspend"
+            >
+              {{ isTogglingSuspend ? '处理中…' : (isSuspended ? '▶ 恢复复习' : '⏸ 暂停复习') }}
+            </button>
+          </div>
         </div>
 
         <!-- 题目信息 -->
@@ -680,6 +713,46 @@ const goBack = () => {
 .state-badge.large {
   font-size: 14px;
   padding: 8px 16px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.suspend-btn {
+  padding: 8px 18px;
+  border: 1px solid #ff9800;
+  border-radius: 8px;
+  background-color: #fff;
+  color: #ff9800;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.suspend-btn:hover:not(:disabled) {
+  background-color: #ff9800;
+  color: #fff;
+}
+
+.suspend-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.suspend-btn.suspended {
+  border-color: #4caf50;
+  color: #4caf50;
+}
+
+.suspend-btn.suspended:hover:not(:disabled) {
+  background-color: #4caf50;
+  color: #fff;
 }
 
 .info-row {

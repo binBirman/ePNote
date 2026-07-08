@@ -57,8 +57,6 @@ const getStateColor = (state: QuestionState) => {
       return '#FF9800'
     case 'STABLE':
       return '#4CAF50'
-    case 'DUE':
-      return '#9C27B0'
     case 'SUSPENDED':
       return '#607D8B'
     default:
@@ -74,8 +72,6 @@ const getStateLabel = (state: QuestionState) => {
       return '学习中'
     case 'STABLE':
       return '已掌握'
-    case 'DUE':
-      return '待复习'
     case 'SUSPENDED':
       return '暂停'
     default:

@@ -166,6 +166,52 @@ pub fn select_meta_values_by_question_key(
     Ok(values)
 }
 
+/// 批量按 `question_id` 取某个 key 的所有值，返回 `HashMap<question_id, Vec<value>>`。
+/// `qids` 为空时直接返回空 HashMap。
+pub fn select_meta_values_by_question_ids(
+    conn: &Connection,
+    qids: &[i64],
+    key: &str,
+) -> Result<std::collections::HashMap<i64, Vec<String>>, DbError> {
+    use std::collections::HashMap;
+
+    if qids.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    let placeholders = std::iter::repeat("?")
+        .take(qids.len())
+        .collect::<Vec<_>>()
+        .join(",");
+    let sql = format!(
+        "SELECT question_id, value FROM meta WHERE question_id IN ({}) AND key = ?",
+        placeholders
+    );
+
+    let mut stmt = conn.prepare(&sql)?;
+
+    let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::with_capacity(qids.len() + 1);
+    for qid in qids {
+        params.push(Box::new(*qid));
+    }
+    params.push(Box::new(key.to_string()));
+
+    let param_refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+
+    let rows = stmt.query_map(param_refs.as_slice(), |row| {
+        let qid: i64 = row.get(0)?;
+        let v: String = row.get(1)?;
+        Ok((qid, v))
+    })?;
+
+    let mut out: HashMap<i64, Vec<String>> = HashMap::new();
+    for r in rows {
+        let (qid, v) = r?;
+        out.entry(qid).or_default().push(v);
+    }
+    Ok(out)
+}
+
 /*
     查询所有不重复的科目值
     输入：

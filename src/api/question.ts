@@ -4,16 +4,6 @@ import type { CreateQuestion, QuestionInfo } from "@/types/question";
 import type { ActiveQuestion, DeleteQuestion } from "@/types/question";
 
 export function createQuestion(context: CreateQuestion) {
-  const payload = {
-    name: context.name,
-    question_image_paths: context.question_image_paths,
-    answer_image_paths: context.answer_image_paths,
-    // backend accepts Option<String> for subject
-    subject: context.subject,
-    knowledge_points: context.knowledge_points,
-  }
-  console.log('[DEBUG] createQuestion payload:', payload)
-  // Tauri expects camelCase parameter names
   const args = {
     name: context.name,
     questionImagePaths: context.question_image_paths,
@@ -21,8 +11,6 @@ export function createQuestion(context: CreateQuestion) {
     subject: context.subject,
     knowledgePoints: context.knowledge_points,
   }
-  console.log('[DEBUG] createQuestion args (questionImagePaths):', args.questionImagePaths)
-  console.log('[DEBUG] createQuestion args (answerImagePaths):', args.answerImagePaths)
   return call<string>("create_question_comm", args);
 }
 
@@ -46,30 +34,44 @@ export function getQuestionData(id: number) {
   return call<QuestionInfo>("get_question_detail_comm", { id });
 }
 
-export function show_list_available_questions_page(page: number, pageSize: number) {
-  console.log("发送参数:", { page, page_size: pageSize })
-  return call<ActiveQuestion[]>("show_list_available_questions_page", {
-    page,
-    pageSize,
-  });
+/**
+ * 分类查询：按科目 + 状态分页过滤；两者均可不传（"ALL" 或 null）。
+ * page 为 0-indexed。
+ */
+export function classifyQuestions(params: {
+  subject?: string | null
+  questionState?: string | null
+  page: number
+  pageSize: number
+}): Promise<ActiveQuestion[]> {
+  return call<ActiveQuestion[]>("classify_questions", {
+    subject: params.subject ?? null,
+    questionState: params.questionState ?? null,
+    page: params.page,
+    pageSize: params.pageSize,
+  })
 }
 
-// 综合筛选题目（关键字 + 科目 + 状态）
-export function showQuestionsWithFilters(
-  keyword: string | null,
-  subject: string | null,
-  state: string | null,
-  page: number,
+/**
+ * 搜索查询：单字符串输入。
+ * - 后端能解析为 i64 → 题目 ID 精确查询；
+ * - 否则 → 名称 / 知识点模糊匹配。
+ * 可叠加 subject / questionState 进行二次过滤（Mode B）。
+ */
+export function searchQuestions(params: {
+  query: string
+  subject?: string | null
+  questionState?: string | null
+  page: number
   pageSize: number
-) {
-  console.log("发送筛选参数:", { keyword, subject, state, page, pageSize })
-  return call<ActiveQuestion[]>("show_questions_with_filters", {
-    keyword,
-    subject,
-    questionState: state,
-    page,
-    pageSize,
-  });
+}): Promise<ActiveQuestion[]> {
+  return call<ActiveQuestion[]>("search_questions", {
+    query: params.query,
+    subject: params.subject ?? null,
+    questionState: params.questionState ?? null,
+    page: params.page,
+    pageSize: params.pageSize,
+  })
 }
 
 export function show_list_deleted_questions_page(page: number, pageSize: number) {
@@ -79,50 +81,8 @@ export function show_list_deleted_questions_page(page: number, pageSize: number)
   });
 }
 
-export function show_list_available_questions_by_state_page(
-  question_state: string,
-  page: number,
-  pageSize: number
-) {
-  return call<ActiveQuestion[]>("show_list_available_questions_by_state_page", {
-    question_state,
-    page,
-    pageSize,
-  });
-}
-
-export function show_list_available_questions_by_subject_page(
-  subject: string,
-  page: number,
-  pageSize: number
-) {
-  return call<ActiveQuestion[]>("show_list_available_questions_by_subject_page", {
-    subject,
-    page,
-    pageSize,
-  });
-}
-
-export function show_list_available_questions_by_subject_and_state_page(
-  subject: string,
-  questionState: string,
-  page: number,
-  pageSize: number
-) {
-  return call<ActiveQuestion[]>("show_list_available_questions_by_subject_and_state_page", {
-    subject,
-    questionState,
-    page,
-    pageSize,
-  });
-}
-
 export function show_subjects() {
   return call<string[]>("show_subjects");
-}
-
-export function show_states() {
-  return call<string[]>("show_states");
 }
 
 export interface UpdateQuestionInput {

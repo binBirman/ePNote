@@ -3,6 +3,9 @@ use super::schema::asset_schema::*;
 use super::schema::meta_schema::*;
 use super::schema::question_schema::*;
 use super::schema::review_schema::*;
+use super::schema::view_schema::{
+    select_view_active_by_id, select_views_classified, select_views_search_fuzzy,
+};
 use super::Connection;
 use chrono::Utc;
 
@@ -373,4 +376,184 @@ fn test_v4_migration_recommendation_table() {
     assert_eq!(result.1, 3);  // review_count
     assert_eq!(result.2, now + 20);  // last_reviewed_at
     assert!((result.3 - 0.6666).abs() < 0.01);  // error_rate = 2/3 ≈ 0.666
+}
+
+fn seed_view_data() -> (Connection, i64, i64, i64) {
+    let conn = setup_test_db();
+    let now = Utc::now().timestamp();
+
+    // 题目 1：数学 + NEW，知识点含 "导数"
+    let q1 = insert_question(&conn, Some("导数基础题"), "NEW", now).unwrap();
+    insert_meta(&conn, q1, "system.Subject", "数学").unwrap();
+    insert_meta(&conn, q1, "system.KnowledgePoint", "导数").unwrap();
+
+    // 题目 2：物理 + LEARNING，知识点含 "牛顿"
+    let q2 = insert_question(&conn, Some("牛顿第二定律"), "LEARNING", now + 1).unwrap();
+    insert_meta(&conn, q2, "system.Subject", "物理").unwrap();
+    insert_meta(&conn, q2, "system.KnowledgePoint", "牛顿").unwrap();
+
+    // 题目 3：数学 + STABLE，无知识点
+    let q3 = insert_question(&conn, Some("极限练习"), "STABLE", now + 2).unwrap();
+    insert_meta(&conn, q3, "system.Subject", "数学").unwrap();
+
+    (conn, q1, q2, q3)
+}
+
+#[test]
+fn test_classify_all_none_returns_all() {
+    let (conn, q1, q2, q3) = seed_view_data();
+    let rows = select_views_classified(&conn, None, None, 10, 0).unwrap();
+    let ids: Vec<i64> = rows.iter().map(|r| r.id).collect();
+    assert_eq!(ids.len(), 3);
+    assert!(ids.contains(&q1) && ids.contains(&q2) && ids.contains(&q3));
+}
+
+#[test]
+fn test_classify_subject_only() {
+    let (conn, q1, _, q3) = seed_view_data();
+    let rows = select_views_classified(&conn, Some("数学"), None, 10, 0).unwrap();
+    let ids: Vec<i64> = rows.iter().map(|r| r.id).collect();
+    assert_eq!(ids.len(), 2);
+    assert!(ids.contains(&q1) && ids.contains(&q3));
+}
+
+#[test]
+fn test_classify_state_only() {
+    let (conn, q1, _, _) = seed_view_data();
+    let rows = select_views_classified(&conn, None, Some("NEW"), 10, 0).unwrap();
+    let ids: Vec<i64> = rows.iter().map(|r| r.id).collect();
+    assert_eq!(ids.len(), 1);
+    assert_eq!(ids[0], q1);
+}
+
+#[test]
+fn test_classify_subject_and_state() {
+    let (conn, q1, _, _) = seed_view_data();
+    let rows = select_views_classified(&conn, Some("数学"), Some("NEW"), 10, 0).unwrap();
+    let ids: Vec<i64> = rows.iter().map(|r| r.id).collect();
+    assert_eq!(ids.len(), 1);
+    assert_eq!(ids[0], q1);
+}
+
+#[test]
+fn test_classify_excludes_deleted() {
+    let conn = setup_test_db();
+    let now = Utc::now().timestamp();
+    let qid = insert_question(&conn, Some("被删除"), "NEW", now).unwrap();
+    insert_meta(&conn, qid, "system.Subject", "数学").unwrap();
+    update_question_deleted_at(&conn, qid, Some(now + 100)).unwrap();
+    let rows = select_views_classified(&conn, None, None, 10, 0).unwrap();
+    assert!(rows.iter().all(|r| r.id != qid));
+}
+
+#[test]
+fn test_search_by_id_exact() {
+    let (conn, q1, _, _) = seed_view_data();
+    let row = select_view_active_by_id(&conn, q1).unwrap();
+    assert!(row.is_some());
+    assert_eq!(row.unwrap().id, q1);
+}
+
+#[test]
+fn test_search_fuzzy_by_name() {
+    let (conn, q1, _, _) = seed_view_data();
+    let rows = select_views_search_fuzzy(&conn, "%导数%", None, None, 10, 0).unwrap();
+    let ids: Vec<i64> = rows.iter().map(|r| r.id).collect();
+    assert_eq!(ids.len(), 1);
+    assert_eq!(ids[0], q1);
+}
+
+#[test]
+fn test_search_fuzzy_by_kp_via_exists() {
+    let (conn, _, q2, _) = seed_view_data();
+    // 题目名不含"牛顿"，但知识点含"牛顿"——EXISTS 子查询应匹配
+    let rows = select_views_search_fuzzy(&conn, "%牛顿%", None, None, 10, 0).unwrap();
+    let ids: Vec<i64> = rows.iter().map(|r| r.id).collect();
+    assert_eq!(ids.len(), 1);
+    assert_eq!(ids[0], q2);
+}
+
+#[test]
+fn test_search_fuzzy_with_subject_filter() {
+    let (conn, _, _, q3) = seed_view_data();
+    // "极限" 只在题目 3 (q3) 的 name 里；subject=数学 应当匹配 q3
+    let rows =
+        select_views_search_fuzzy(&conn, "%极限%", Some("数学"), None, 10, 0).unwrap();
+    let ids: Vec<i64> = rows.iter().map(|r| r.id).collect();
+    assert_eq!(ids.len(), 1);
+    assert!(ids.contains(&q3));
+}
+
+#[test]
+fn test_search_fuzzy_no_match() {
+    let (conn, _, _, _) = seed_view_data();
+    let rows = select_views_search_fuzzy(&conn, "%不存在的关键词%", None, None, 10, 0).unwrap();
+    assert!(rows.is_empty());
+}
+
+#[test]
+fn test_v10_migration_converts_due_to_stable() {
+    use super::migrate;
+    use rusqlite::Connection;
+
+    // 在迁移前手动插入一条 state='DUE' 的题目，模拟老库数据
+    let mut conn = Connection::open_in_memory().unwrap();
+    migrate(&mut conn).unwrap(); // 跑完 v1..v9 后停
+
+    // 直接写一条 DUE 记录（v10 之前这是合法的）
+    conn.execute(
+        "INSERT INTO question (id, name, state, created_at, deleted_at) VALUES (1, '老DUE题目', 'DUE', 1000, NULL)",
+        [],
+    ).unwrap();
+
+    // 确认还是 DUE
+    let state_before: String = conn
+        .query_row("SELECT state FROM question WHERE id = 1", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(state_before, "DUE");
+
+    // 触发 v10 迁移
+    conn.execute_batch(
+        "UPDATE question SET state = 'STABLE' WHERE state = 'DUE';
+         UPDATE schema_version SET version = 10;",
+    )
+    .unwrap();
+
+    let state_after: String = conn
+        .query_row("SELECT state FROM question WHERE id = 1", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(state_after, "STABLE");
+}
+
+#[test]
+fn test_v10_migration_leaves_other_states_untouched() {
+    use super::migrate;
+    use rusqlite::Connection;
+
+    let mut conn = Connection::open_in_memory().unwrap();
+    migrate(&mut conn).unwrap();
+
+    conn.execute(
+        "INSERT INTO question (id, name, state, created_at) VALUES (1, 'n', 'NEW', 1)",
+        [],
+    ).unwrap();
+    conn.execute(
+        "INSERT INTO question (id, name, state, created_at) VALUES (2, 'l', 'LEARNING', 2)",
+        [],
+    ).unwrap();
+    conn.execute(
+        "INSERT INTO question (id, name, state, created_at) VALUES (3, 's', 'STABLE', 3)",
+        [],
+    ).unwrap();
+
+    conn.execute_batch("UPDATE question SET state = 'STABLE' WHERE state = 'DUE'").unwrap();
+
+    let states: Vec<String> = conn
+        .prepare("SELECT state FROM question ORDER BY id")
+        .unwrap()
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .map(|r| r.unwrap())
+        .collect();
+    assert_eq!(states, vec!["NEW", "LEARNING", "STABLE"]);
 }

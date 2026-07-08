@@ -1,14 +1,13 @@
 //! 状态机模块 - 实现错题本系统的状态转移逻辑
 //!
-//! 状态转移规则（根据设计文档）：
+//! 状态转移规则（当前实现）：
 //! - NEW → LEARNING: 首次复习（任意结果）
-//! - LEARNING → LEARNING: 复习结果 = 错误/模糊
+//! - LEARNING → LEARNING: 复习结果 = 错误/模糊，或连续正确 < 3 次
 //! - LEARNING → STABLE: 连续正确 ≥ 3 次
 //! - STABLE → LEARNING: 任意一次复习结果 = 错误/模糊
-//! - STABLE → DUE: 当前时间 ≥ due_at
-//! - DUE → LEARNING/STABLE: 复习结果决定
+//! - STABLE → STABLE: 复习结果 = 正确
 //! - 任意状态 → SUSPENDED: 用户手动暂停
-//! - SUSPENDED → DUE: 用户手动恢复
+//! - SUSPENDED → 原状态: 用户手动恢复（保存于 meta `system.PreSuspendState`）
 
 use crate::domain::enums::{QuestionState, ReviewResult};
 use crate::domain::question::Question;
@@ -130,30 +129,6 @@ impl QuestionStateMachine {
                     }
                 }
             }
-            QuestionState::DUE => {
-                // DUE 状态下的转移
-                match result {
-                    ReviewResult::CORRECT => {
-                        // DUE → STABLE: 正确
-                        let new_streak = current_streak + 1;
-                        StateTransition {
-                            new_state: QuestionState::STABLE,
-                            correct_streak: new_streak,
-                            wrong_count: current_wrong,
-                            due_at: Some(Self::calculate_next_due(now, QuestionState::STABLE)),
-                        }
-                    }
-                    ReviewResult::WRONG | ReviewResult::FUZZY => {
-                        // DUE → LEARNING: 错误/模糊
-                        StateTransition {
-                            new_state: QuestionState::LEARNING,
-                            correct_streak: 0,
-                            wrong_count: current_wrong + 1,
-                            due_at: Some(Self::calculate_next_due(now, QuestionState::LEARNING)),
-                        }
-                    }
-                }
-            }
             QuestionState::SUSPENDED => {
                 // SUSPENDED 状态：恢复后应该变成 DUE
                 // 但这个方法不处理恢复，恢复由单独的 suspend/recover 方法处理
@@ -178,26 +153,21 @@ impl QuestionStateMachine {
         }
     }
 
-    /// 恢复题目（SUSPENDED → DUE）
-    pub fn recover(question: &Question, now: Timestamp) -> StateTransition {
+    /// 恢复题目（SUSPENDED → `target_state`）。
+    /// `target_state` 由调用方从 `system.PreSuspendState` meta 读取；
+    /// meta 缺失时调用方应回退到 `LEARNING`。
+    /// 恢复后 `due_at` 设为 `now`，表示立即可被推荐。
+    pub fn recover(
+        question: &Question,
+        target_state: QuestionState,
+        now: Timestamp,
+    ) -> StateTransition {
         StateTransition {
-            new_state: QuestionState::DUE,
+            new_state: target_state,
             correct_streak: question.correct_streak,
             wrong_count: question.wrong_count,
-            due_at: Some(now), // 恢复时设置为当前时间，表示立即到期
+            due_at: Some(now),
         }
-    }
-
-    /// 检查题目是否应该从 STABLE 转移到 DUE（到期检查）
-    pub fn check_due_transition(question: &Question, now: Timestamp) -> Option<QuestionState> {
-        if question.state == QuestionState::STABLE {
-            if let Some(due_at) = question.due_at {
-                if now >= due_at {
-                    return Some(QuestionState::DUE);
-                }
-            }
-        }
-        None
     }
 
     /// 根据状态计算下次复习间隔
@@ -281,16 +251,6 @@ mod tests {
     }
 
     #[test]
-    fn test_due_to_stable_on_correct() {
-        let question = create_question(QuestionState::DUE);
-        let now = Timestamp::from(1000);
-
-        let result = QuestionStateMachine::process_review(&question, ReviewResult::CORRECT, now);
-
-        assert_eq!(result.new_state, QuestionState::STABLE);
-    }
-
-    #[test]
     fn test_suspend() {
         let question = create_question(QuestionState::LEARNING);
 
@@ -301,12 +261,24 @@ mod tests {
     }
 
     #[test]
-    fn test_recover() {
+    fn test_recover_to_stable() {
         let question = create_question(QuestionState::SUSPENDED);
         let now = Timestamp::from(1000);
 
-        let result = QuestionStateMachine::recover(&question, now);
+        let result = QuestionStateMachine::recover(&question, QuestionState::STABLE, now);
 
-        assert_eq!(result.new_state, QuestionState::DUE);
+        assert_eq!(result.new_state, QuestionState::STABLE);
+        assert_eq!(result.due_at, Some(now));
+    }
+
+    #[test]
+    fn test_recover_to_learning() {
+        let question = create_question(QuestionState::SUSPENDED);
+        let now = Timestamp::from(1000);
+
+        let result = QuestionStateMachine::recover(&question, QuestionState::LEARNING, now);
+
+        assert_eq!(result.new_state, QuestionState::LEARNING);
+        assert_eq!(result.due_at, Some(now));
     }
 }

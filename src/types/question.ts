@@ -46,7 +46,7 @@ export interface QuestionInfo {
   last_reviewed_at: string | null;
 }
 
-export type QuestionState = 'NEW' | 'LEARNING' | 'STABLE' | 'DUE' | 'SUSPENDED';
+export type QuestionState = 'NEW' | 'LEARNING' | 'STABLE' | 'SUSPENDED';
 
 // 复习结果类型
 export type ReviewResult = 'CORRECT' | 'WRONG' | 'FUZZY';

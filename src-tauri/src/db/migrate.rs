@@ -169,6 +169,15 @@ const MIGRATIONS: &[Migration] = &[
             GROUP BY question_id;
         "#,
     },
+    Migration {
+        version: 10,
+        name: "drop_due_state",
+        sql: r#"
+        -- DUE 状态被废弃：推荐算法按 score 选题，不再依赖 state=DUE。
+        -- 将存量 state='DUE' 转为 'STABLE'，与新行为保持一致。
+        UPDATE question SET state = 'STABLE' WHERE state = 'DUE';
+        "#,
+    },
 ];
 
 /*
