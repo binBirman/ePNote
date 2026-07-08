@@ -54,8 +54,11 @@ onMounted(async () => {
       const questionIds = questionIdsParam.split(',').map(id => parseInt(id, 10)).filter(id => !isNaN(id))
       result = await getQuestionsByIds(questionIds)
     } else {
-      // 正常使用推荐系统获取每日推荐
-      result = await getRecommendationList(reviewLimit.value)
+      // 正常使用推荐系统获取每日推荐；按 URL 中的 subject 筛选
+      const subject = selectedSubject.value && selectedSubject.value !== 'ALL'
+        ? selectedSubject.value
+        : undefined
+      result = await getRecommendationList(reviewLimit.value, subject)
     }
 
     recommendQuestionsData.value = result

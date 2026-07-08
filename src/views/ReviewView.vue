@@ -55,8 +55,9 @@ const loadReviewStatus = async () => {
 
 const loadPendingQuestions = async () => {
   try {
-    // 使用新推荐系统获取每日推荐
-    const result = await getRecommendationList(200)
+    // 使用新推荐系统获取每日推荐；按所选学科筛选
+    const subject = selectedSubject.value === '全部' ? undefined : selectedSubject.value
+    const result = await getRecommendationList(200, subject)
     pendingQuestions.value = result
   } catch (e) {
     console.error('加载推荐题目失败:', e)

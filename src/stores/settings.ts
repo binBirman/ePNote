@@ -77,6 +77,13 @@ export const useSettingsStore = defineStore('settings', () => {
     subjectConfigs.value = { ...subjectConfigs.value, [subject]: config }
   }
 
+  /** 设置科目每⽇推荐题数限制；传 null 表示回退到全局默认 */
+  function setSubjectRecommendationLimit(subject: string, limit: number | null) {
+    const config = subjectConfigs.value[subject] ?? { archived: false, recommendation_limit: null }
+    config.recommendation_limit = limit
+    subjectConfigs.value = { ...subjectConfigs.value, [subject]: config }
+  }
+
   /** 打开数据目录 */
   async function openDataDir() {
     await openDataDirectory()
@@ -100,6 +107,7 @@ export const useSettingsStore = defineStore('settings', () => {
     saveSettings,
     loadSubjectPool,
     toggleSubjectArchive,
+    setSubjectRecommendationLimit,
     openDataDir,
   }
 })

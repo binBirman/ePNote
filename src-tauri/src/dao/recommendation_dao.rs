@@ -209,7 +209,16 @@ impl<'a> RecommendationDao<'a> {
     }
 
     /// 获取今日未复习的推荐题目
-    pub fn get_pending_recommendations(&self, limit: i64) -> Result<Vec<RecommendedQuestion>, DbError> {
+    ///
+    /// `subject`：可选的科目筛选。
+    /// - `None` 不过滤，返回所有科目。
+    /// - `Some("未分类")` 只返回未标注科目的题目。
+    /// - `Some("其他")` 只返回该科目。
+    pub fn get_pending_recommendations(
+        &self,
+        limit: i64,
+        subject: Option<&str>,
+    ) -> Result<Vec<RecommendedQuestion>, DbError> {
         let now = crate::util::time::now_ts();
         let day = LogicalDay::from(now).0;
         let (day_start, day_end) = crate::util::time::range_of_day(LogicalDay(day));
@@ -233,6 +242,7 @@ impl<'a> RecommendationDao<'a> {
             LEFT JOIN review_summary rs ON r.question_id = rs.question_id
             WHERE r.day = ?1
               AND q.deleted_at IS NULL
+              AND (?5 IS NULL OR r.subject = ?5)
               AND NOT EXISTS (
                   SELECT 1 FROM review rev
                   WHERE rev.question_id = r.question_id
@@ -244,7 +254,9 @@ impl<'a> RecommendationDao<'a> {
             "#
         )?;
 
-        let rows = stmt.query_map(rusqlite::params![day, day_start.0, day_end.0, limit], |row| {
+        let rows = stmt.query_map(
+            rusqlite::params![day, day_start.0, day_end.0, limit, subject],
+            |row| {
             let reason_text: Option<String> = row.get(10)?;
             let reason = reason_text
                 .filter(|t| t != "null")

@@ -28,10 +28,16 @@ pub fn get_daily_recommendation_comm(
 }
 
 /// 获取推荐题目列表（用于复习会话）- 只返回未复习的题目
+///
+/// `subject`：可选的科目筛选。
+/// - `None` / `null` 不过滤，返回所有科目。
+/// - `Some("未分类")` 只返回未标注科目的题目。
+/// - `Some("其他")` 只返回该科目。
 #[tauri::command]
 pub fn get_recommendation_list_comm(
     state: tauri::State<AppState>,
     limit: Option<i64>,
+    subject: Option<String>,
 ) -> Result<Vec<RecommendedQuestion>, String> {
     let guard = state.inner.lock().unwrap();
     let conn = match &*guard {
@@ -41,7 +47,11 @@ pub fn get_recommendation_list_comm(
     let dao = RecommendationDao::new(conn);
     let settings = config::load_settings();
     let default_limit = settings.default_review_limit as i64;
-    dao.get_pending_recommendations(limit.unwrap_or(default_limit)).map_err(|e| e.to_string())
+    dao.get_pending_recommendations(
+        limit.unwrap_or(default_limit),
+        subject.as_deref().filter(|s| !s.is_empty()),
+    )
+    .map_err(|e| e.to_string())
 }
 
 /// 预览推荐（对所有题目评分，标记入选/落选，不写库）

@@ -96,11 +96,13 @@ export function getTodayReviewRecords() {
 /**
  * 获取推荐题目列表（新推荐系统）
  * @param limit 推荐数量，默认 10
+ * @param subject 可选的科目筛选；"全部"/不传 返回所有科目
  * @returns 推荐题目列表
  */
-export function getRecommendationList(limit?: number) {
+export function getRecommendationList(limit?: number, subject?: string) {
   return call<RecommendedQuestion[]>("get_recommendation_list_comm", {
     limit,
+    subject,
   });
 }
 

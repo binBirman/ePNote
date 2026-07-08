@@ -38,6 +38,22 @@ async function copyDataPath() {
     saveMessage.value = '复制失败'
   }
 }
+
+function onSubjectLimitChange(subject: string, event: Event) {
+  const target = event.target as HTMLInputElement
+  const raw = target.value.trim()
+  if (raw === '') {
+    store.setSubjectRecommendationLimit(subject, null)
+    return
+  }
+  const n = parseInt(raw, 10)
+  if (isNaN(n) || n < 0) {
+    store.setSubjectRecommendationLimit(subject, null)
+    target.value = ''
+    return
+  }
+  store.setSubjectRecommendationLimit(subject, n)
+}
 </script>
 
 <template>
@@ -185,20 +201,34 @@ async function copyDataPath() {
     <!-- 科目池管理 -->
     <div class="settings-card">
       <h2 class="card-title">科目池管理</h2>
-      <p class="pool-desc">勾选的科目参与每日推荐，取消勾选归档该科目</p>
+      <p class="pool-desc">勾选的科目参与每日推荐，取消勾选归档该科目；右侧可单独覆盖该科的每日推荐题数</p>
 
       <!-- 正常科目 -->
       <div v-for="subject in store.allSubjects" :key="subject" class="subject-row">
         <input type="checkbox"
           :checked="!store.subjectConfigs[subject]?.archived"
           @change="store.toggleSubjectArchive(subject)" />
-        <span>{{ subject }}</span>
+        <span class="subject-name">{{ subject }}</span>
+        <div class="subject-limit">
+          <span class="subject-limit-label">每日推荐</span>
+          <input
+            type="number"
+            class="subject-limit-input"
+            min="0"
+            max="50"
+            placeholder="默认"
+            :value="store.subjectConfigs[subject]?.recommendation_limit ?? ''"
+            :disabled="store.subjectConfigs[subject]?.archived"
+            @change="onSubjectLimitChange(subject, $event)"
+          />
+          <span class="subject-limit-unit">题</span>
+        </div>
       </div>
 
       <!-- 未分类题目（虚拟科目，不在 subjectConfigs 中） -->
       <div class="subject-row unclassified">
         <input type="checkbox" checked disabled />
-        <span>未分类题目</span>
+        <span class="subject-name">未分类题目</span>
         <span class="unclassified-hint">未标注科目的题目，始终参与推荐</span>
       </div>
     </div>
@@ -468,6 +498,50 @@ async function copyDataPath() {
 
 .subject-row.unclassified {
   opacity: 0.7;
+}
+
+.subject-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.subject-limit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.subject-limit-label {
+  font-size: 12px;
+  color: #999;
+}
+
+.subject-limit-input {
+  width: 56px;
+  padding: 4px 6px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid #4CAF50;
+  border-radius: 4px;
+  color: #333;
+}
+
+.subject-limit-input:disabled {
+  border-color: #ddd;
+  background-color: #fafafa;
+  color: #aaa;
+}
+
+.subject-limit-input:focus {
+  outline: none;
+  border-color: #45a049;
+}
+
+.subject-limit-unit {
+  font-size: 12px;
+  color: #999;
 }
 
 .unclassified-hint {
