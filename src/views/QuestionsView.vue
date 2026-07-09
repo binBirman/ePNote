@@ -707,8 +707,6 @@ const goToRecycleBin = () => {
 
 .pagination {
   flex-shrink: 0;
-  position: sticky;
-  bottom: 0;
   background-color: #f5f5f5;
   padding: 14px 0;
   margin-top: 8px;
