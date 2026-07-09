@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import type { ActiveQuestion } from '@/types/question'
 import {
@@ -38,6 +38,7 @@ const searchKeyword = ref(initialSearchKeyword)
 const stateFilter = ref<string>(initialStateFilter)
 const subjectFilter = ref<string>(initialSubjectFilter)
 const pageSize = 10
+const dynamicPageSize = ref(pageSize)
 const currentPage = ref(initialPage)
 const hasNext = ref(false)
 const errorMsg = ref('')
@@ -56,20 +57,102 @@ const subjects = ref<string[]>([])
 
 const isSearching = computed(() => searchKeyword.value.trim().length > 0)
 
+const containerRef = ref<HTMLElement | null>(null)
+const titleRef = ref<HTMLElement | null>(null)
+const toolbarRef = ref<HTMLElement | null>(null)
+const paginationRef = ref<HTMLElement | null>(null)
+const firstItemRef = ref<HTMLElement | null>(null)
+
+const MIN_PAGE_SIZE = 3
+const DEFAULT_ITEM_HEIGHT = 120
+const LIST_GAP = 12
+const VIEWPORT_BUFFER = 16
+const OUTER_PADDING_ESTIMATE = 90
+
+const setFirstItemRef = (el: unknown) => {
+  if (el && !firstItemRef.value && el instanceof Element) {
+    firstItemRef.value = el as HTMLElement
+  }
+}
+
+const getEffectiveSize = (): number => dynamicPageSize.value || pageSize
+
+let resizeTimer: ReturnType<typeof setTimeout> | null = null
+let resizeObserver: ResizeObserver | null = null
+
+const recomputePageSize = () => {
+  if (typeof window === 'undefined') return
+  if (!titleRef.value || !toolbarRef.value || !paginationRef.value) return
+  const vh = window.innerHeight
+  const chromeH =
+    titleRef.value.offsetHeight +
+    toolbarRef.value.offsetHeight +
+    paginationRef.value.offsetHeight +
+    OUTER_PADDING_ESTIMATE
+  const available = Math.max(0, vh - chromeH - VIEWPORT_BUFFER)
+  if (available <= 0) {
+    if (dynamicPageSize.value !== MIN_PAGE_SIZE) dynamicPageSize.value = MIN_PAGE_SIZE
+    return
+  }
+  const itemH = firstItemRef.value
+    ? firstItemRef.value.offsetHeight
+    : DEFAULT_ITEM_HEIGHT
+  const usableH = itemH > 0 ? itemH : DEFAULT_ITEM_HEIGHT
+  const newSize = Math.max(MIN_PAGE_SIZE, Math.floor(available / (usableH + LIST_GAP)))
+  if (newSize !== dynamicPageSize.value) {
+    dynamicPageSize.value = newSize
+  }
+}
+
+const scheduleRecompute = () => {
+  if (resizeTimer) clearTimeout(resizeTimer)
+  resizeTimer = setTimeout(() => {
+    resizeTimer = null
+    recomputePageSize()
+  }, 150)
+}
+
+const setupResize = () => {
+  if (typeof ResizeObserver !== 'undefined') {
+    resizeObserver = new ResizeObserver(scheduleRecompute)
+    resizeObserver.observe(document.body)
+  } else {
+    window.addEventListener('resize', scheduleRecompute)
+  }
+}
+
+const teardownResize = () => {
+  if (resizeTimer) {
+    clearTimeout(resizeTimer)
+    resizeTimer = null
+  }
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  } else if (typeof window !== 'undefined') {
+    window.removeEventListener('resize', scheduleRecompute)
+  }
+}
+
 let initialized = false
 
-onMounted(() => {
+onMounted(async () => {
   initialized = true
-  ;(async () => {
-    try {
-      subjects.value = await show_subjects()
-    } catch (e) {
-      console.error('加载科目失败', e)
-      subjects.value = []
-    }
-    await loadQuestions(currentPage.value)
-  })()
+  setupResize()
+  await nextTick()
+  recomputePageSize()
+  try {
+    subjects.value = await show_subjects()
+  } catch (e) {
+    console.error('加载科目失败', e)
+    subjects.value = []
+  }
+  await loadQuestions(currentPage.value)
+  await nextTick()
+  recomputePageSize()
 })
+
+onBeforeUnmount(teardownResize)
 
 const persistToUrl = () => {
   if (!initialized) return
@@ -125,7 +208,9 @@ const loadQuestions = async (page = 0) => {
 
     displayedQuestions.value = res.map(mapActive)
     currentPage.value = page
-    hasNext.value = res.length >= pageSize
+    hasNext.value = res.length >= getEffectiveSize()
+    await nextTick()
+    recomputePageSize()
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     errorMsg.value = msg
@@ -140,15 +225,16 @@ const fetchQuestionsPage = async (
   questionState: string | null,
   page: number,
 ): Promise<ActiveQuestion[]> => {
+  const size = getEffectiveSize()
   return isSearching.value
     ? await searchQuestions({
         query: searchKeyword.value.trim(),
         subject,
         questionState,
         page,
-        pageSize,
+        pageSize: size,
       })
-    : await classifyQuestions({ subject, questionState, page, pageSize })
+    : await classifyQuestions({ subject, questionState, page, pageSize: size })
 }
 
 const probeHasNext = async (page: number): Promise<boolean> => {
@@ -156,11 +242,17 @@ const probeHasNext = async (page: number): Promise<boolean> => {
   const questionState = stateFilter.value === 'ALL' ? null : stateFilter.value
   try {
     const res = await fetchQuestionsPage(subject, questionState, page)
-    return res.length >= pageSize
+    return res.length >= getEffectiveSize()
   } catch {
     return false
   }
 }
+
+watch(dynamicPageSize, async (newSize, oldSize) => {
+  if (!initialized) return
+  if (newSize === oldSize) return
+  await loadQuestions(currentPage.value)
+})
 
 const filteredQuestions = computed(() => displayedQuestions.value)
 
@@ -265,11 +357,11 @@ const goToRecycleBin = () => {
 </script>
 
 <template>
-  <div class="questions-container">
-    <h1 class="page-title">题目管理</h1>
+  <div ref="containerRef" class="questions-container">
+    <h1 ref="titleRef" class="page-title">题目管理</h1>
 
     <!-- 工具栏 -->
-    <div class="toolbar">
+    <div ref="toolbarRef" class="toolbar">
       <div class="toolbar-left">
         <div class="search-wrap">
           <input
@@ -311,6 +403,7 @@ const goToRecycleBin = () => {
         v-for="question in filteredQuestions"
         :key="question.id"
         class="question-item"
+        :ref="setFirstItemRef"
         @click="goToDetail(question.id)"
       >
         <div class="question-header">
@@ -342,7 +435,7 @@ const goToRecycleBin = () => {
       </div>
 
       <!-- 分页控件 -->
-      <div class="pagination" style="display:flex;justify-content:center;align-items:center;gap:12px;margin-top:16px;flex-wrap:wrap;">
+      <div ref="paginationRef" class="pagination">
         <button class="btn" @click="firstPage" :disabled="currentPage === 0">« 首页</button>
         <button class="btn" @click="prevPage" :disabled="currentPage === 0">上一页</button>
         <div class="page-indicator" style="display:flex;align-items:center;gap:6px;">
@@ -371,6 +464,10 @@ const goToRecycleBin = () => {
   width: 100%;
   max-width: 800px;
   margin: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .page-title {
@@ -508,6 +605,9 @@ const goToRecycleBin = () => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .question-item {
@@ -591,6 +691,22 @@ const goToRecycleBin = () => {
 
 .empty-action:hover {
   background-color: #45a049;
+}
+
+.pagination {
+  flex-shrink: 0;
+  position: sticky;
+  bottom: 0;
+  background-color: #f5f5f5;
+  padding: 12px 0;
+  margin-top: 8px;
+  z-index: 10;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.06);
 }
 
 .page-jump-input {
