@@ -133,6 +133,10 @@ const teardownResize = () => {
     clearTimeout(resizeTimer)
     resizeTimer = null
   }
+  if (loadDebounce) {
+    clearTimeout(loadDebounce)
+    loadDebounce = null
+  }
   if (resizeObserver) {
     resizeObserver.disconnect()
     resizeObserver = null
