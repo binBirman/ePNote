@@ -68,6 +68,7 @@ const DEFAULT_ITEM_HEIGHT = 120
 const LIST_GAP = 12
 const VIEWPORT_BUFFER = 16
 const OUTER_PADDING_ESTIMATE = 90
+const FILL_THRESHOLD = 2 / 3
 
 const setFirstItemRef = (el: unknown) => {
   if (el && !firstItemRef.value && el instanceof Element) {
@@ -98,7 +99,13 @@ const recomputePageSize = () => {
     ? firstItemRef.value.offsetHeight
     : DEFAULT_ITEM_HEIGHT
   const usableH = itemH > 0 ? itemH : DEFAULT_ITEM_HEIGHT
-  const newSize = Math.max(MIN_PAGE_SIZE, Math.floor(available / (usableH + LIST_GAP)))
+  const slot = usableH + LIST_GAP
+  const raw = available / slot
+  const base = Math.floor(raw)
+  const frac = raw - base
+  // 余下空间 > 2/3 个格子时多塞一个；否则按 floor 保留底部留白
+  const filled = frac > FILL_THRESHOLD && frac < 1 ? base + 1 : base
+  const newSize = Math.max(MIN_PAGE_SIZE, filled)
   if (newSize !== dynamicPageSize.value) {
     dynamicPageSize.value = newSize
   }
@@ -711,6 +718,7 @@ const goToRecycleBin = () => {
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.08);
 }
 
 .page-indicator {
