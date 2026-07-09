@@ -581,16 +581,19 @@ impl<'a> RecommendationSystem<'a> {
         Ok(final_questions)
     }
 
-    /// 获取所有未删除的题目
+    /// 获取所有未删除、未暂停的题目（SUSPENDED 不参与推荐打分池）
     fn get_all_active_questions(&self) -> Result<Vec<Question>, DbError> {
         let mut questions = Vec::new();
 
-        // 查询所有未删除的题目
+        // 查询所有未删除、未暂停的题目
         let rows = crate::db::select_all_active_questions(self.conn)?;
 
         for row in rows {
             let q = crate::repo::question_row_to_domain(&row)
                 .map_err(|e| DbError::Migration(format!("convert error: {:?}", e)))?;
+            if q.state == QuestionState::SUSPENDED {
+                continue;
+            }
             questions.push(q);
         }
 

@@ -286,9 +286,13 @@ impl<'a> ReviewManager<'a> {
         let mut reasons = Vec::new();
         let mut added_ids = std::collections::HashSet::new();
 
-        // 辅助函数：检查题目科目是否匹配
+        // 辅助函数：检查题目是否进入推荐池
+        // 1. SUSPENDED 状态：用户暂停复习，不参与推荐（无论怎么筛选都不选）
+        // 2. 科目筛选：subject 为 None 或 "" 时全选；否则 meta 的科目严格匹配
         let subject_matches = |q: &Question, subject: Option<&str>| -> bool {
-            // 没有科目筛选条件，返回 true
+            if q.state == QuestionState::SUSPENDED {
+                return false;
+            }
             if subject.is_none() || subject == Some("") {
                 return true;
             }
@@ -579,5 +583,46 @@ mod tests {
         let mgr = ReviewManager::new(&conn);
         let err = mgr.recover(qid).unwrap_err();
         assert!(err.contains("only suspended"), "got: {}", err);
+    }
+
+    #[test]
+    fn test_recommend_excludes_suspended() {
+        let conn = setup();
+
+        // 题 A: STABLE + 上次答错，应被推荐（step 1 last_result=WRONG）
+        let qid_a = insert_question(&conn, "题A", QuestionState::STABLE);
+        let now = now_ts();
+        conn.execute(
+            "UPDATE question SET last_result='WRONG', last_review_at=?1 WHERE id=?2",
+            rusqlite::params![now.as_i64(), i64::from(qid_a)],
+        )
+        .unwrap();
+
+        // 题 B: SUSPENDED（模拟：曾答错，被用户暂停），同样 last_result=WRONG
+        let qid_b = insert_question(&conn, "题B", QuestionState::STABLE);
+        conn.execute(
+            "UPDATE question SET state='SUSPENDED', last_result='WRONG', last_review_at=?1 WHERE id=?2",
+            rusqlite::params![now.as_i64(), i64::from(qid_b)],
+        )
+        .unwrap();
+
+        let mgr = ReviewManager::new(&conn);
+        let result = mgr.recommend(Some(10), None).unwrap();
+        let ids: Vec<i64> = result
+            .questions
+            .iter()
+            .map(|q| i64::from(q.id.clone()))
+            .collect();
+
+        assert!(
+            ids.contains(&i64::from(qid_a)),
+            "题 A 应被推荐: {:?}",
+            ids
+        );
+        assert!(
+            !ids.contains(&i64::from(qid_b)),
+            "SUSPENDED 题 B 必须不出现在推荐列表里: {:?}",
+            ids
+        );
     }
 }
