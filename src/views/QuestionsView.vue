@@ -612,8 +612,9 @@ const goToRecycleBin = () => {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-height: 0;
+  max-height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -709,8 +710,6 @@ const goToRecycleBin = () => {
   flex-shrink: 0;
   background-color: #f5f5f5;
   padding: 14px 0;
-  margin-top: 8px;
-  z-index: 10;
   display: flex;
   justify-content: center;
   align-items: center;
