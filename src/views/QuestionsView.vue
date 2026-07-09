@@ -298,7 +298,7 @@ const goToRecycleBin = () => {
       </div>
       <div class="toolbar-right">
         <button class="recycle-bin-btn" @click="goToRecycleBin">
-          🗑️ 回收站
+          回收站
         </button>
         <button class="new-btn" @click="goToNew">
           + 新建题目
@@ -469,22 +469,21 @@ const goToRecycleBin = () => {
 }
 
 .recycle-bin-btn {
-  padding: 10px 20px;
-  background-color: #fff;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  color: #666;
-  font-size: 14px;
-  font-weight: 500;
-  transition: all 0.2s;
+  padding: 8px 16px;
+  background-color: #455a64;
+  border: none;
+  border-radius: 6px;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  transition: background-color 0.2s;
   white-space: nowrap;
   cursor: pointer;
 }
 
 .recycle-bin-btn:hover {
-  background-color: #f5f5f5;
-  border-color: #bbb;
-  color: #333;
+  background-color: #37474f;
 }
 
 .new-btn {

@@ -60,7 +60,16 @@ const getProgressWidth = (count: number) => {
     <!-- 概览卡片 -->
     <div class="overview-cards">
       <div class="stat-card">
-        <div class="stat-icon">📚</div>
+        <div class="stat-icon icon-blue">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="5" rx="0.8" />
+            <rect x="3" y="11" width="18" height="5" rx="0.8" />
+            <rect x="3" y="18" width="18" height="5" rx="0.8" />
+            <line x1="6" y1="6.5" x2="14" y2="6.5" />
+            <line x1="6" y1="13.5" x2="14" y2="13.5" />
+            <line x1="6" y1="20.5" x2="14" y2="20.5" />
+          </svg>
+        </div>
         <div class="stat-info">
           <div class="stat-value">{{ stats.total_questions }}</div>
           <div class="stat-label">总题目数</div>
@@ -68,7 +77,13 @@ const getProgressWidth = (count: number) => {
       </div>
 
       <div class="stat-card">
-        <div class="stat-icon">🎯</div>
+        <div class="stat-icon icon-green">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" />
+            <circle cx="12" cy="12" r="5.5" />
+            <circle cx="12" cy="12" r="2" />
+          </svg>
+        </div>
         <div class="stat-info">
           <div class="stat-value">{{ stats.today_reviewed }}</div>
           <div class="stat-label">今日已复习</div>
@@ -76,7 +91,14 @@ const getProgressWidth = (count: number) => {
       </div>
 
       <div class="stat-card">
-        <div class="stat-icon">🔄</div>
+        <div class="stat-icon icon-orange">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M20 12a8 8 0 0 1 -14 5.3" />
+            <polyline points="6 21 6 16 11 16" />
+            <path d="M4 12a8 8 0 0 1 14 -5.3" />
+            <polyline points="18 3 18 8 13 8" />
+          </svg>
+        </div>
         <div class="stat-info">
           <div class="stat-value">{{ stats.total_reviews }}</div>
           <div class="stat-label">总复习次数</div>
@@ -84,7 +106,14 @@ const getProgressWidth = (count: number) => {
       </div>
 
       <div class="stat-card">
-        <div class="stat-icon">📊</div>
+        <div class="stat-icon icon-purple">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="5" y1="20" x2="20" y2="20" />
+            <rect x="6" y="14" width="3.5" height="6" />
+            <rect x="11" y="9" width="3.5" height="11" />
+            <rect x="16" y="4" width="3.5" height="16" />
+          </svg>
+        </div>
         <div class="stat-info">
           <div class="stat-value">{{ stats.average_accuracy.toFixed(0) }}%</div>
           <div class="stat-label">平均准确率</div>
@@ -206,7 +235,33 @@ const getProgressWidth = (count: number) => {
 }
 
 .stat-icon {
-  font-size: 32px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.stat-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.icon-blue {
+  color: #2196F3;
+}
+
+.icon-green {
+  color: #4CAF50;
+}
+
+.icon-orange {
+  color: #FF9800;
+}
+
+.icon-purple {
+  color: #9C27B0;
 }
 
 .stat-info {
