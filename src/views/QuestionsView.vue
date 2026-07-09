@@ -438,7 +438,7 @@ const goToRecycleBin = () => {
       <div ref="paginationRef" class="pagination">
         <button class="btn" @click="firstPage" :disabled="currentPage === 0">« 首页</button>
         <button class="btn" @click="prevPage" :disabled="currentPage === 0">上一页</button>
-        <div class="page-indicator" style="display:flex;align-items:center;gap:6px;">
+        <div class="page-indicator">
           第
           <input
             v-model="pageJumpInput"
@@ -608,6 +608,7 @@ const goToRecycleBin = () => {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .question-item {
@@ -641,6 +642,8 @@ const goToRecycleBin = () => {
   color: #333;
   line-height: 1.5;
   margin: 0;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .state-badge {
@@ -661,6 +664,8 @@ const goToRecycleBin = () => {
 .meta-item {
   color: #666;
   font-size: 13px;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .empty-state {
@@ -698,7 +703,7 @@ const goToRecycleBin = () => {
   position: sticky;
   bottom: 0;
   background-color: #f5f5f5;
-  padding: 12px 0;
+  padding: 14px 0;
   margin-top: 8px;
   z-index: 10;
   display: flex;
@@ -706,7 +711,12 @@ const goToRecycleBin = () => {
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
-  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.page-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .page-jump-input {
