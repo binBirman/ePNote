@@ -18,11 +18,27 @@ const STATE_OPTIONS: { value: string; label: string }[] = [
   { value: 'SUSPENDED', label: '已暂停' },
 ]
 
-const searchKeyword = ref('')
-const stateFilter = ref<string>('ALL')
-const subjectFilter = ref<string>('ALL')
+const readQueryPage = (): number => {
+  const raw = route.query.page
+  const n = Array.isArray(raw) ? Number(raw[0]) : Number(raw)
+  return Number.isFinite(n) && n >= 0 ? n : 0
+}
+const readQueryString = (key: string, def: string): string => {
+  const raw = route.query[key]
+  const v = Array.isArray(raw) ? raw[0] : raw
+  return typeof v === 'string' && v.length > 0 ? v : def
+}
+
+const initialSearchKeyword = readQueryString('q', '')
+const initialStateFilter = readQueryString('state', 'ALL')
+const initialSubjectFilter = readQueryString('subject', 'ALL')
+const initialPage = readQueryPage()
+
+const searchKeyword = ref(initialSearchKeyword)
+const stateFilter = ref<string>(initialStateFilter)
+const subjectFilter = ref<string>(initialSubjectFilter)
 const pageSize = 10
-const currentPage = ref(0)
+const currentPage = ref(initialPage)
 const hasNext = ref(false)
 const errorMsg = ref('')
 
@@ -40,7 +56,10 @@ const subjects = ref<string[]>([])
 
 const isSearching = computed(() => searchKeyword.value.trim().length > 0)
 
+let initialized = false
+
 onMounted(() => {
+  initialized = true
   ;(async () => {
     try {
       subjects.value = await show_subjects()
@@ -48,13 +67,25 @@ onMounted(() => {
       console.error('加载科目失败', e)
       subjects.value = []
     }
-    await loadQuestions()
+    await loadQuestions(currentPage.value)
   })()
 })
 
-watch(() => route.query.r, (v) => {
-  if (v) loadQuestions()
+const persistToUrl = () => {
+  if (!initialized) return
+  const query: Record<string, string> = {}
+  if (searchKeyword.value) query.q = searchKeyword.value
+  if (stateFilter.value !== 'ALL') query.state = stateFilter.value
+  if (subjectFilter.value !== 'ALL') query.subject = subjectFilter.value
+  if (currentPage.value > 0) query.page = String(currentPage.value)
+  router.replace({ path: '/questions', query })
+}
+
+watch(() => route.fullPath, () => {
+  if (initialized) loadQuestions(currentPage.value)
 })
+
+watch([searchKeyword, stateFilter, subjectFilter, currentPage], persistToUrl)
 
 // 防抖：搜索框与分类控件共用
 let loadDebounce: ReturnType<typeof setTimeout> | null = null
@@ -66,9 +97,9 @@ const scheduleLoad = (page = 0) => {
 }
 
 // 搜索或分类变化时重置到第一页
-watch(subjectFilter, () => scheduleLoad(0))
-watch(stateFilter, () => scheduleLoad(0))
-watch(searchKeyword, () => scheduleLoad(0))
+watch(subjectFilter, () => initialized && scheduleLoad(0))
+watch(stateFilter, () => initialized && scheduleLoad(0))
+watch(searchKeyword, () => initialized && scheduleLoad(0))
 
 const clearSearch = () => {
   searchKeyword.value = ''
@@ -90,15 +121,7 @@ const loadQuestions = async (page = 0) => {
   const questionState = stateFilter.value === 'ALL' ? null : stateFilter.value
 
   try {
-    const res = isSearching.value
-      ? await searchQuestions({
-          query: searchKeyword.value.trim(),
-          subject,
-          questionState,
-          page,
-          pageSize,
-        })
-      : await classifyQuestions({ subject, questionState, page, pageSize })
+    const res = await fetchQuestionsPage(subject, questionState, page)
 
     displayedQuestions.value = res.map(mapActive)
     currentPage.value = page
@@ -109,6 +132,33 @@ const loadQuestions = async (page = 0) => {
     console.error('加载题目失败', msg)
     displayedQuestions.value = []
     hasNext.value = false
+  }
+}
+
+const fetchQuestionsPage = async (
+  subject: string | null,
+  questionState: string | null,
+  page: number,
+): Promise<ActiveQuestion[]> => {
+  return isSearching.value
+    ? await searchQuestions({
+        query: searchKeyword.value.trim(),
+        subject,
+        questionState,
+        page,
+        pageSize,
+      })
+    : await classifyQuestions({ subject, questionState, page, pageSize })
+}
+
+const probeHasNext = async (page: number): Promise<boolean> => {
+  const subject = subjectFilter.value === 'ALL' ? null : subjectFilter.value
+  const questionState = stateFilter.value === 'ALL' ? null : stateFilter.value
+  try {
+    const res = await fetchQuestionsPage(subject, questionState, page)
+    return res.length >= pageSize
+  } catch {
+    return false
   }
 }
 
@@ -160,6 +210,53 @@ const prevPage = () => {
 const nextPage = () => {
   if (!hasNext.value) return
   loadQuestions(currentPage.value + 1)
+}
+
+const firstPage = () => {
+  if (currentPage.value === 0) return
+  loadQuestions(0)
+}
+
+const pageJumpInput = ref('')
+const isJumpingToLast = ref(false)
+
+watch(currentPage, (n) => {
+  pageJumpInput.value = String(Math.max(1, n + 1))
+}, { immediate: true })
+
+const jumpToPage = () => {
+  const raw = pageJumpInput.value.trim()
+  if (!raw) {
+    pageJumpInput.value = String(currentPage.value + 1)
+    return
+  }
+  const n = Number(raw)
+  if (!Number.isFinite(n) || n < 1) {
+    pageJumpInput.value = String(currentPage.value + 1)
+    return
+  }
+  loadQuestions(Math.floor(n) - 1)
+}
+
+const lastPage = async () => {
+  if (!hasNext.value || isJumpingToLast.value) return
+  isJumpingToLast.value = true
+  try {
+    let lo = currentPage.value
+    let hi = lo + 1
+    while (await probeHasNext(hi)) {
+      lo = hi
+      hi = hi * 2
+    }
+    while (lo + 1 < hi) {
+      const mid = (lo + hi) >> 1
+      if (await probeHasNext(mid)) lo = mid
+      else hi = mid
+    }
+    loadQuestions(lo)
+  } finally {
+    isJumpingToLast.value = false
+  }
 }
 
 const goToRecycleBin = () => {
@@ -245,10 +342,25 @@ const goToRecycleBin = () => {
       </div>
 
       <!-- 分页控件 -->
-      <div class="pagination" style="display:flex;justify-content:center;gap:12px;margin-top:16px;">
+      <div class="pagination" style="display:flex;justify-content:center;align-items:center;gap:12px;margin-top:16px;flex-wrap:wrap;">
+        <button class="btn" @click="firstPage" :disabled="currentPage === 0">« 首页</button>
         <button class="btn" @click="prevPage" :disabled="currentPage === 0">上一页</button>
-        <div style="align-self:center">第 {{ currentPage + 1 }} 页</div>
+        <div class="page-indicator" style="display:flex;align-items:center;gap:6px;">
+          第
+          <input
+            v-model="pageJumpInput"
+            type="number"
+            min="1"
+            class="page-jump-input"
+            @keydown.enter="jumpToPage"
+            @blur="jumpToPage"
+          />
+          页
+        </div>
         <button class="btn" @click="nextPage" :disabled="!hasNext">下一页</button>
+        <button class="btn" @click="lastPage" :disabled="!hasNext || isJumpingToLast">
+          {{ isJumpingToLast ? '定位中…' : '末页 »' }}
+        </button>
       </div>
     </div>
   </div>
@@ -479,5 +591,28 @@ const goToRecycleBin = () => {
 
 .empty-action:hover {
   background-color: #45a049;
+}
+
+.page-jump-input {
+  width: 60px;
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background-color: #fff;
+  color: #333;
+  font-size: 14px;
+  text-align: center;
+  -moz-appearance: textfield;
+}
+
+.page-jump-input::-webkit-outer-spin-button,
+.page-jump-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.page-jump-input:focus {
+  outline: none;
+  border-color: #4CAF50;
 }
 </style>

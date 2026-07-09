@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { getTodayReviewRecords, getDailyReviewStatus } from '@/api/review'
 import type { ReviewResult } from '@/types/question'
+import { goBack } from '@/utils/back'
 
 // 复习结果项
 interface ReviewResultItem {
@@ -101,8 +102,8 @@ const goToDetail = (questionId: number) => {
 }
 
 // 返回复习页
-const goBack = () => {
-  router.push('/review')
+const goBackView = () => {
+  goBack(router, '/review')
 }
 
 // 重新复习错题（练习模式，不计入记录）
@@ -150,7 +151,7 @@ const getResultText = (result: ReviewResult) => {
     <template v-else>
       <h1 class="page-title">复习总结</h1>
       <div class="summary-actions">
-        <button class="back-btn" @click="goBack">返回复习首页</button>
+        <button class="back-btn" @click="goBackView">← 返回</button>
       </div>
 
       <!-- 统计卡片 -->

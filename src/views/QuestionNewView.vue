@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { createQuestion, getImageBase64 } from '@/api/question'
 import { open } from "@tauri-apps/plugin-dialog";
+import { goBack } from '@/utils/back'
 
 interface ImageItem {
   path: string;
@@ -173,7 +174,7 @@ const handleSubmit = async () => {
     questionAnswerImages.value = []
 
     alert('题目创建成功！')
-    router.push({ path: '/questions', query: { r: String(Date.now()) } })
+    goBack(router, '/questions')
   } catch (e) {
     console.error(e)
     alert('创建题目失败：' + String(e))
@@ -193,7 +194,7 @@ const handleCancel = () => {
       return
     }
   }
-  router.push('/questions')
+  goBack(router, '/questions')
 }
 
 // 使用 Tauri dialog 选择多个图片（逐个选择，可以多次添加）
@@ -312,7 +313,7 @@ const moveAnswerImageDown = (index: number) => {
   <div class="new-container">
     <div class="back-section">
       <button class="back-link" @click="handleCancel">
-        ← 返回列表
+        ← 返回
       </button>
     </div>
 

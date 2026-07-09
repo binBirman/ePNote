@@ -6,6 +6,7 @@ import { suspendQuestion, recoverQuestion } from '@/api/review'
 import type { QuestionInfo, QuestionImage } from '@/types/question'
 import type { QuestionState } from '@/types/question'
 import { open } from "@tauri-apps/plugin-dialog";
+import { goBack } from '@/utils/back'
 
 interface ImageItem {
   path: string;
@@ -107,7 +108,7 @@ onMounted(async () => {
     question.value = await getQuestionData(id)
     if (!question.value) {
       error.value = '题目不存在'
-      router.push('/questions')
+      goBack(router, '/questions')
     }
     // 初始化编辑表单
     if (question.value) {
@@ -429,7 +430,7 @@ const handleDelete = async () => {
   isDeleting.value = true
   try {
     await deleteQuestion(question.value.id)
-    router.push('/questions')
+    goBack(router, '/questions')
   } catch (e) {
     error.value = e instanceof Error ? e.message : '删除失败'
     console.error('Failed to delete question:', e)
@@ -438,15 +439,15 @@ const handleDelete = async () => {
   }
 }
 
-const goBack = () => {
-  router.push('/questions')
+const goBackView = () => {
+  goBack(router, '/questions')
 }
 </script>
 
 <template>
   <div class="detail-container">
-    <button class="back-link" @click="goBack">
-      ← 返回列表
+    <button class="back-link" @click="goBackView">
+      ← 返回
     </button>
 
     <div v-if="isLoading" class="loading">

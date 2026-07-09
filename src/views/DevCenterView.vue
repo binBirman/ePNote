@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useSettingsStore } from '@/stores/settings'
 import { getRecommendationStats, regenerateDailyRecommendation } from '@/api/review'
 import type { RecommendationStats } from '@/api/review'
+import { goBack } from '@/utils/back'
 
 const router = useRouter()
 const store = useSettingsStore()
@@ -66,8 +67,8 @@ function goToPreview() {
   router.push('/dev/preview-recommendation')
 }
 
-function goBack() {
-  router.push('/settings')
+function goBackView() {
+  goBack(router, '/settings')
 }
 </script>
 
@@ -75,7 +76,7 @@ function goBack() {
   <div class="dev-center">
     <div class="page-header">
       <h1 class="page-title">开发者中心</h1>
-      <button class="back-btn" @click="goBack">返回设置</button>
+      <button class="back-btn" @click="goBackView">← 返回</button>
     </div>
 
     <!-- 统计面板 -->

@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { getQuestionData, restoreQuestion, permanentlyDeleteQuestion, getImageBase64 } from '@/api/question'
 import type { QuestionInfo, QuestionImage } from '@/types/question'
+import { goBack } from '@/utils/back'
 
 const router = useRouter()
 const route = useRoute()
@@ -78,7 +79,7 @@ const handlePermanentDelete = async () => {
   try {
     await permanentlyDeleteQuestion(question.value.id)
     alert('永久删除成功！')
-    router.push('/recycle-bin')
+    goBack(router, '/recycle-bin')
   } catch (e) {
     error.value = e instanceof Error ? e.message : '删除失败'
     console.error('Failed to permanently delete question:', e)
@@ -87,15 +88,15 @@ const handlePermanentDelete = async () => {
   }
 }
 
-const goBack = () => {
-  router.push('/recycle-bin')
+const goBackView = () => {
+  goBack(router, '/recycle-bin')
 }
 </script>
 
 <template>
   <div class="detail-container">
-    <button class="back-link" @click="goBack">
-      ← 返回回收站
+    <button class="back-link" @click="goBackView">
+      ← 返回
     </button>
 
     <div v-if="isLoading" class="loading">

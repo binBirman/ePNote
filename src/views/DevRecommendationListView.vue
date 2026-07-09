@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getDailyRecommendation } from '@/api/review'
 import type { DailyRecommendation, RecommendedQuestion } from '@/api/review'
+import { goBack } from '@/utils/back'
 
 const router = useRouter()
 
@@ -21,8 +22,8 @@ onMounted(async () => {
   }
 })
 
-function goBack() {
-  router.push('/dev/center')
+function goBackView() {
+  goBack(router, '/dev/center')
 }
 </script>
 
@@ -30,7 +31,7 @@ function goBack() {
   <div class="list-page">
     <div class="page-header">
       <h1 class="page-title">今日推荐列表</h1>
-      <button class="back-btn" @click="goBack">返回开发者中心</button>
+      <button class="back-btn" @click="goBackView">← 返回</button>
     </div>
 
     <div v-if="loading" class="loading-text">加载中...</div>

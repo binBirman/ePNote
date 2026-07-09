@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { previewRecommendation } from '@/api/review'
 import type { PreviewRecommendationItem } from '@/api/review'
+import { goBack } from '@/utils/back'
 
 const router = useRouter()
 
@@ -42,8 +43,8 @@ async function onShowExclusionReasonChange() {
   await loadPreview()
 }
 
-function goBack() {
-  router.push('/dev/center')
+function goBackView() {
+  goBack(router, '/dev/center')
 }
 </script>
 
@@ -51,7 +52,7 @@ function goBack() {
   <div class="preview-page">
     <div class="page-header">
       <h1 class="page-title">预览推荐</h1>
-      <button class="back-btn" @click="goBack">返回开发者中心</button>
+      <button class="back-btn" @click="goBackView">← 返回</button>
     </div>
 
     <!-- 复选框控制 -->

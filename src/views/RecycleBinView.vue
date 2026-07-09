@@ -8,6 +8,7 @@ import {
 } from '@/api/question'
 import type { DeleteQuestion } from '@/types/question'
 import type { QuestionState } from '@/types/question'
+import { goBack } from '@/utils/back'
 
 const router = useRouter()
 
@@ -156,8 +157,8 @@ const goToDetail = (id: number) => {
   router.push(`/recycle-bin/${id}`)
 }
 
-const goBack = () => {
-  router.push('/questions')
+const goBackView = () => {
+  goBack(router, '/questions')
 }
 </script>
 
@@ -165,8 +166,8 @@ const goBack = () => {
   <div class="recycle-bin-container">
     <div class="header-section">
       <h1 class="page-title">回收站</h1>
-      <button class="back-btn" @click="goBack">
-        ← 返回题目列表
+      <button class="back-btn" @click="goBackView">
+        ← 返回
       </button>
     </div>
 
@@ -258,7 +259,7 @@ const goBack = () => {
       <div v-else class="empty-state">
         <div class="empty-icon">🗑️</div>
         <p class="empty-text">回收站为空</p>
-        <button class="empty-action" @click="goBack">返回题目列表</button>
+        <button class="empty-action" @click="goBackView">← 返回</button>
       </div>
     </template>
   </div>
