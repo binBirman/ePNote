@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import type { ActiveQuestion } from '@/types/question'
 import {
@@ -37,8 +37,7 @@ const initialPage = readQueryPage()
 const searchKeyword = ref(initialSearchKeyword)
 const stateFilter = ref<string>(initialStateFilter)
 const subjectFilter = ref<string>(initialSubjectFilter)
-const pageSize = 10
-const dynamicPageSize = ref(pageSize)
+const pageSize = 8
 const currentPage = ref(initialPage)
 const hasNext = ref(false)
 const errorMsg = ref('')
@@ -57,101 +56,10 @@ const subjects = ref<string[]>([])
 
 const isSearching = computed(() => searchKeyword.value.trim().length > 0)
 
-const containerRef = ref<HTMLElement | null>(null)
-const titleRef = ref<HTMLElement | null>(null)
-const toolbarRef = ref<HTMLElement | null>(null)
-const paginationRef = ref<HTMLElement | null>(null)
-const firstItemRef = ref<HTMLElement | null>(null)
-
-const MIN_PAGE_SIZE = 3
-const DEFAULT_ITEM_HEIGHT = 120
-const LIST_GAP = 12
-const VIEWPORT_BUFFER = 16
-const OUTER_PADDING_ESTIMATE = 90
-const FILL_THRESHOLD = 2 / 3
-
-const setFirstItemRef = (el: unknown) => {
-  if (el && !firstItemRef.value && el instanceof Element) {
-    firstItemRef.value = el as HTMLElement
-  }
-}
-
-const getEffectiveSize = (): number => dynamicPageSize.value || pageSize
-
-let resizeTimer: ReturnType<typeof setTimeout> | null = null
-let resizeObserver: ResizeObserver | null = null
-
-const recomputePageSize = () => {
-  if (typeof window === 'undefined') return
-  if (!titleRef.value || !toolbarRef.value || !paginationRef.value) return
-  const vh = window.innerHeight
-  const chromeH =
-    titleRef.value.offsetHeight +
-    toolbarRef.value.offsetHeight +
-    paginationRef.value.offsetHeight +
-    OUTER_PADDING_ESTIMATE
-  const available = Math.max(0, vh - chromeH - VIEWPORT_BUFFER)
-  if (available <= 0) {
-    if (dynamicPageSize.value !== MIN_PAGE_SIZE) dynamicPageSize.value = MIN_PAGE_SIZE
-    return
-  }
-  const itemH = firstItemRef.value
-    ? firstItemRef.value.offsetHeight
-    : DEFAULT_ITEM_HEIGHT
-  const usableH = itemH > 0 ? itemH : DEFAULT_ITEM_HEIGHT
-  const slot = usableH + LIST_GAP
-  const raw = available / slot
-  const base = Math.floor(raw)
-  const frac = raw - base
-  // 余下空间 > 2/3 个格子时多塞一个；否则按 floor 保留底部留白
-  const filled = frac > FILL_THRESHOLD && frac < 1 ? base + 1 : base
-  const newSize = Math.max(MIN_PAGE_SIZE, filled)
-  if (newSize !== dynamicPageSize.value) {
-    dynamicPageSize.value = newSize
-  }
-}
-
-const scheduleRecompute = () => {
-  if (resizeTimer) clearTimeout(resizeTimer)
-  resizeTimer = setTimeout(() => {
-    resizeTimer = null
-    recomputePageSize()
-  }, 150)
-}
-
-const setupResize = () => {
-  if (typeof ResizeObserver !== 'undefined') {
-    resizeObserver = new ResizeObserver(scheduleRecompute)
-    resizeObserver.observe(document.body)
-  } else {
-    window.addEventListener('resize', scheduleRecompute)
-  }
-}
-
-const teardownResize = () => {
-  if (resizeTimer) {
-    clearTimeout(resizeTimer)
-    resizeTimer = null
-  }
-  if (loadDebounce) {
-    clearTimeout(loadDebounce)
-    loadDebounce = null
-  }
-  if (resizeObserver) {
-    resizeObserver.disconnect()
-    resizeObserver = null
-  } else if (typeof window !== 'undefined') {
-    window.removeEventListener('resize', scheduleRecompute)
-  }
-}
-
 let initialized = false
 
 onMounted(async () => {
   initialized = true
-  setupResize()
-  await nextTick()
-  recomputePageSize()
   try {
     subjects.value = await show_subjects()
   } catch (e) {
@@ -159,11 +67,23 @@ onMounted(async () => {
     subjects.value = []
   }
   await loadQuestions(currentPage.value)
-  await nextTick()
-  recomputePageSize()
 })
 
-onBeforeUnmount(teardownResize)
+// 防抖：搜索框与分类控件共用
+let loadDebounce: ReturnType<typeof setTimeout> | null = null
+const scheduleLoad = (page = 0) => {
+  if (loadDebounce) clearTimeout(loadDebounce)
+  loadDebounce = setTimeout(() => {
+    loadQuestions(page)
+  }, 250)
+}
+
+onBeforeUnmount(() => {
+  if (loadDebounce) {
+    clearTimeout(loadDebounce)
+    loadDebounce = null
+  }
+})
 
 const persistToUrl = () => {
   if (!initialized) return
@@ -180,15 +100,6 @@ watch(() => route.fullPath, () => {
 })
 
 watch([searchKeyword, stateFilter, subjectFilter, currentPage], persistToUrl)
-
-// 防抖：搜索框与分类控件共用
-let loadDebounce: ReturnType<typeof setTimeout> | null = null
-const scheduleLoad = (page = 0) => {
-  if (loadDebounce) clearTimeout(loadDebounce)
-  loadDebounce = setTimeout(() => {
-    loadQuestions(page)
-  }, 250)
-}
 
 // 搜索或分类变化时重置到第一页
 watch(subjectFilter, () => initialized && scheduleLoad(0))
@@ -219,9 +130,7 @@ const loadQuestions = async (page = 0) => {
 
     displayedQuestions.value = res.map(mapActive)
     currentPage.value = page
-    hasNext.value = res.length >= getEffectiveSize()
-    await nextTick()
-    recomputePageSize()
+    hasNext.value = res.length >= pageSize
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     errorMsg.value = msg
@@ -236,16 +145,15 @@ const fetchQuestionsPage = async (
   questionState: string | null,
   page: number,
 ): Promise<ActiveQuestion[]> => {
-  const size = getEffectiveSize()
   return isSearching.value
     ? await searchQuestions({
         query: searchKeyword.value.trim(),
         subject,
         questionState,
         page,
-        pageSize: size,
+        pageSize,
       })
-    : await classifyQuestions({ subject, questionState, page, pageSize: size })
+    : await classifyQuestions({ subject, questionState, page, pageSize })
 }
 
 const probeHasNext = async (page: number): Promise<boolean> => {
@@ -253,17 +161,11 @@ const probeHasNext = async (page: number): Promise<boolean> => {
   const questionState = stateFilter.value === 'ALL' ? null : stateFilter.value
   try {
     const res = await fetchQuestionsPage(subject, questionState, page)
-    return res.length >= getEffectiveSize()
+    return res.length >= pageSize
   } catch {
     return false
   }
 }
-
-watch(dynamicPageSize, async (newSize, oldSize) => {
-  if (!initialized) return
-  if (newSize === oldSize) return
-  await loadQuestions(currentPage.value)
-})
 
 const filteredQuestions = computed(() => displayedQuestions.value)
 
@@ -368,11 +270,11 @@ const goToRecycleBin = () => {
 </script>
 
 <template>
-  <div ref="containerRef" class="questions-container">
-    <h1 ref="titleRef" class="page-title">题目管理</h1>
+  <div class="questions-container">
+    <h1 class="page-title">题目管理</h1>
 
     <!-- 工具栏 -->
-    <div ref="toolbarRef" class="toolbar">
+    <div class="toolbar">
       <div class="toolbar-left">
         <div class="search-wrap">
           <input
@@ -408,13 +310,12 @@ const goToRecycleBin = () => {
       {{ errorMsg }}
     </div>
 
-    <!-- 题目列表 -->
+    <!-- 题目列表：内部可滚动 -->
     <div class="questions-list">
       <div
         v-for="question in filteredQuestions"
         :key="question.id"
         class="question-item"
-        :ref="setFirstItemRef"
         @click="goToDetail(question.id)"
       >
         <div class="question-header">
@@ -444,28 +345,28 @@ const goToRecycleBin = () => {
         <p class="empty-text">暂无题目</p>
         <button class="empty-action" @click="goToNew">立即创建</button>
       </div>
+    </div>
 
-      <!-- 分页控件 -->
-      <div ref="paginationRef" class="pagination">
-        <button class="btn" @click="firstPage" :disabled="currentPage === 0">« 首页</button>
-        <button class="btn" @click="prevPage" :disabled="currentPage === 0">上一页</button>
-        <div class="page-indicator">
-          第
-          <input
-            v-model="pageJumpInput"
-            type="number"
-            min="1"
-            class="page-jump-input"
-            @keydown.enter="jumpToPage"
-            @blur="jumpToPage"
-          />
-          页
-        </div>
-        <button class="btn" @click="nextPage" :disabled="!hasNext">下一页</button>
-        <button class="btn" @click="lastPage" :disabled="!hasNext || isJumpingToLast">
-          {{ isJumpingToLast ? '定位中…' : '末页 »' }}
-        </button>
+    <!-- 分页控件：sticky 固定在底 -->
+    <div class="pagination">
+      <button class="btn" @click="firstPage" :disabled="currentPage === 0">« 首页</button>
+      <button class="btn" @click="prevPage" :disabled="currentPage === 0">上一页</button>
+      <div class="page-indicator">
+        第
+        <input
+          v-model="pageJumpInput"
+          type="number"
+          min="1"
+          class="page-jump-input"
+          @keydown.enter="jumpToPage"
+          @blur="jumpToPage"
+        />
+        页
       </div>
+      <button class="btn" @click="nextPage" :disabled="!hasNext">下一页</button>
+      <button class="btn" @click="lastPage" :disabled="!hasNext || isJumpingToLast">
+        {{ isJumpingToLast ? '定位中…' : '末页 »' }}
+      </button>
     </div>
   </div>
 </template>
@@ -616,9 +517,8 @@ const goToRecycleBin = () => {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-height: 0;
-  max-height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -712,8 +612,11 @@ const goToRecycleBin = () => {
 
 .pagination {
   flex-shrink: 0;
+  position: sticky;
+  bottom: 0;
   background-color: #f5f5f5;
   padding: 14px 0;
+  z-index: 10;
   display: flex;
   justify-content: center;
   align-items: center;
