@@ -383,10 +383,9 @@ watch(
       </div>
     </div>
 
-    <!-- 分科错误率 -->
+    <!-- 分科复习状况 -->
     <div class="section-card">
-      <h2 class="section-title">分科错误率</h2>
-      <p class="section-desc">仅显示活动学科；模糊结果不计入准确率（业务规则 6.2.2）</p>
+      <h2 class="section-title">分科复习状况</h2>
       <div v-if="loadingSubjectStats" class="loading-inline">加载中...</div>
       <table v-else class="subject-stats-table">
         <thead>
@@ -418,7 +417,6 @@ watch(
     <!-- 复习行为统计：折线图 -->
     <div class="section-card">
       <h2 class="section-title">复习行为统计</h2>
-      <p class="section-desc">每个活动学科一条折线；横轴按"逻辑日"（时区与切日按设置调整）</p>
 
       <div class="month-switcher">
         <button class="month-btn" @click="prevMonth">←</button>
@@ -550,12 +548,6 @@ watch(
   color: #333;
   margin-bottom: 12px;
   font-weight: 600;
-}
-
-.section-desc {
-  color: #888;
-  font-size: 12px;
-  margin-bottom: 16px;
 }
 
 /* 状态分布 */
