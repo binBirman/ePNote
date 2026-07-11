@@ -2,7 +2,7 @@
 
 use crate::db::error::DbError;
 use crate::server::recommendation::RecommendedQuestion;
-use crate::util::time::LogicalDay;
+use crate::util::time::{ClockConfig, LogicalDay};
 use rusqlite::Connection;
 
 /// 每日复习状态
@@ -124,7 +124,8 @@ impl<'a> RecommendationDao<'a> {
     /// 获取今日复习状态
     pub fn get_daily_review_status(&self) -> Result<DailyReviewStatus, DbError> {
         let now = crate::util::time::now_ts();
-        let day = LogicalDay::from(now).0;
+        let cfg = ClockConfig::default();
+        let day = LogicalDay::from_timestamp(now, &cfg).0;
 
         // 获取今天推荐的题目数量
         let recommended_count: i64 = self.conn.query_row(
@@ -143,7 +144,7 @@ impl<'a> RecommendationDao<'a> {
         }
 
         // 获取今天的时间范围
-        let (day_start, day_end) = crate::util::time::range_of_day(LogicalDay(day));
+        let (day_start, day_end) = crate::util::time::range_of_day(LogicalDay(day), &cfg);
 
         // 获取今天复习过的题目数量（在推荐范围内的）
         let reviewed_count: i64 = self.conn.query_row(
@@ -169,8 +170,9 @@ impl<'a> RecommendationDao<'a> {
     /// 获取今日复习记录详情
     pub fn get_today_review_records(&self) -> Result<Vec<ReviewRecord>, DbError> {
         let now = crate::util::time::now_ts();
-        let day = LogicalDay::from(now).0;
-        let (day_start, day_end) = crate::util::time::range_of_day(LogicalDay(day));
+        let cfg = ClockConfig::default();
+        let day = LogicalDay::from_timestamp(now, &cfg).0;
+        let (day_start, day_end) = crate::util::time::range_of_day(LogicalDay(day), &cfg);
 
         let mut stmt = self.conn.prepare(
             r#"
@@ -220,8 +222,9 @@ impl<'a> RecommendationDao<'a> {
         subject: Option<&str>,
     ) -> Result<Vec<RecommendedQuestion>, DbError> {
         let now = crate::util::time::now_ts();
-        let day = LogicalDay::from(now).0;
-        let (day_start, day_end) = crate::util::time::range_of_day(LogicalDay(day));
+        let cfg = ClockConfig::default();
+        let day = LogicalDay::from_timestamp(now, &cfg).0;
+        let (day_start, day_end) = crate::util::time::range_of_day(LogicalDay(day), &cfg);
 
         let mut stmt = self.conn.prepare(
             r#"

@@ -111,4 +111,31 @@ impl<'a> ReviewDao<'a> {
 
         Ok(map)
     }
+
+    /// 每个科目的错误率统计（不分时间）。`subject_filter = None` 即全部。
+    pub fn subject_error_stats(
+        &self,
+        subject_filter: Option<&str>,
+    ) -> Result<Vec<crate::db::SubjectStatRow>, DbError> {
+        crate::db::select_subject_error_stats(self.conn, subject_filter)
+    }
+
+    /// 每日 × 科目 复习行为时间序列。
+    ///
+    /// `subject_filter = None` 即"全部科目"；`start_day_bucket` / `end_day_bucket`
+    /// 为 `None` 即不限时间范围（拉全部历史）。具体数值由前端按日历月算并
+    /// 把 unix sec 减 10800（即本地月初 - 3h）转 day_bucket。
+    pub fn review_daily_series(
+        &self,
+        subject_filter: Option<&str>,
+        start_day_bucket: Option<i64>,
+        end_day_bucket: Option<i64>,
+    ) -> Result<Vec<crate::db::DailySeriesRow>, DbError> {
+        crate::db::select_review_daily_series(
+            self.conn,
+            subject_filter,
+            start_day_bucket,
+            end_day_bucket,
+        )
+    }
 }

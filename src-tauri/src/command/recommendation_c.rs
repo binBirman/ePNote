@@ -90,7 +90,8 @@ pub fn regenerate_daily_recommendation_comm(
     };
 
     let now = crate::util::time::now_ts();
-    let day = crate::util::time::LogicalDay::from(now).0 as i64;
+    let cfg = crate::util::time::ClockConfig::default();
+    let day = crate::util::time::LogicalDay::from_timestamp(now, &cfg).0 as i64;
 
     let recommendation_dao = RecommendationDao::new(conn);
 

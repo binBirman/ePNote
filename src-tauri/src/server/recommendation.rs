@@ -12,7 +12,7 @@ use crate::db::error::DbError;
 use crate::domain::enums::{QuestionState, ReviewResult};
 use crate::domain::ids::QuestionId;
 use crate::domain::question::Question;
-use crate::util::time::{now_ts, LogicalDay, Timestamp};
+use crate::util::time::{now_ts, ClockConfig, LogicalDay, Timestamp};
 use rusqlite::Connection;
 use serde::Serialize;
 
@@ -116,7 +116,8 @@ impl<'a> RecommendationSystem<'a> {
         new_question_guarantee_ratio: f64,
     ) -> Result<DailyRecommendation, DbError> {
         let now = now_ts();
-        let day = LogicalDay::from(now).0 as i64;
+        let cfg = ClockConfig::default();
+        let day = LogicalDay::from_timestamp(now, &cfg).0 as i64;
 
         // 尝试从数据库加载今日推荐
         if let Some(questions) = self.recommendation_dao.get_by_day(day)? {
@@ -364,6 +365,7 @@ impl<'a> RecommendationSystem<'a> {
         let review_summaries = self.review_dao.get_all_error_rates()?;
         let subject_key = "system.Subject";
         let now = now_ts();
+        let cfg = ClockConfig::default();
 
         let total_questions = all_questions.len();
         let mut participating = 0usize;
@@ -411,7 +413,7 @@ impl<'a> RecommendationSystem<'a> {
         }
 
         // 今日推荐题数
-        let day = LogicalDay::from(now).0 as i64;
+        let day = LogicalDay::from_timestamp(now, &cfg).0 as i64;
         let recommended_count = self
             .recommendation_dao
             .get_by_day(day)?

@@ -4,7 +4,7 @@ use tauri::State;
 use crate::app::appstate::AppState;
 use crate::domain::View;
 use crate::server::show_question_view;
-use crate::util::time::LogicalDay;
+use crate::util::time::{ClockConfig, LogicalDay};
 
 #[derive(Serialize)]
 pub struct ActiveQuestion {
@@ -22,6 +22,7 @@ pub struct ActiveQuestion {
 }
 impl ActiveQuestion {
     pub fn new(views: Vec<View>) -> Vec<ActiveQuestion> {
+        let cfg = ClockConfig::default();
         views
             .into_iter()
             .map(|v| Self {
@@ -30,11 +31,11 @@ impl ActiveQuestion {
                 title: v.name.unwrap_or_default(),
                 status: v.state.as_str().to_string(),
                 knowledge_points: v.knowledge_points,
-                created_at: LogicalDay::from(v.created_at).to_string(),
+                created_at: LogicalDay::from_timestamp(v.created_at, &cfg).to_string(&cfg),
                 last_review: if v.last_reviewed_at.0 == 0 {
                     String::new()
                 } else {
-                    LogicalDay::from(v.last_reviewed_at).to_string()
+                    LogicalDay::from_timestamp(v.last_reviewed_at, &cfg).to_string(&cfg)
                 },
                 wrong_count: v.wrong_count,
                 error_rate: v.error_rate,
@@ -54,6 +55,7 @@ pub struct DeleteQuestion {
 }
 impl DeleteQuestion {
     pub fn new(views: Vec<View>) -> Vec<DeleteQuestion> {
+        let cfg = ClockConfig::default();
         views
             .into_iter()
             .map(|v| Self {
@@ -64,7 +66,7 @@ impl DeleteQuestion {
                 knowledge_points: v.knowledge_points,
                 deleted_at: v
                     .deleted_at
-                    .map(|ts| LogicalDay::from(ts).to_string())
+                    .map(|ts| LogicalDay::from_timestamp(ts, &cfg).to_string(&cfg))
                     .unwrap_or_default(),
             })
             .collect()

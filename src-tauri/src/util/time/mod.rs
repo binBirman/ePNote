@@ -3,5 +3,5 @@ pub mod timestamp;
 
 mod tests;
 
-pub use logical_day::{days_since, range_of_day, LogicalDay};
+pub use logical_day::{days_since, range_of_day, ClockConfig, LogicalDay};
 pub use timestamp::{now_ts, to_unix_ts, Timestamp};

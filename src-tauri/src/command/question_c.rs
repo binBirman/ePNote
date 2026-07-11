@@ -8,7 +8,7 @@ use crate::server::question_manager::{
     delete_question_image, get_question_detail, permanently_delete_question, rename_question,
     restore_question, update_question_meta,
 };
-use crate::util::time::LogicalDay;
+use crate::util::time::{ClockConfig, LogicalDay};
 
 #[derive(Serialize, Deserialize)]
 pub struct QuestionImageData {
@@ -240,16 +240,17 @@ pub fn get_question_detail_comm(
                 .collect();
 
             // Get last reviewed date from reviews
+            let cfg = ClockConfig::default();
             let last_reviewed_at = q_info.reviews.first().map(|r| {
-                LogicalDay::from(r.reviewed_at).to_string()
+                LogicalDay::from_timestamp(r.reviewed_at, &cfg).to_string(&cfg)
             });
 
             Ok(QuestionInfoData {
                 id: question.id.into(),
                 name: question.name,
                 state: question.state.as_str().to_string(),
-                created_at: LogicalDay::from(question.created_at).to_string(),
-                deleted_at: question.deleted_at.map(|ts| LogicalDay::from(ts).to_string()),
+                created_at: LogicalDay::from_timestamp(question.created_at, &cfg).to_string(&cfg),
+                deleted_at: question.deleted_at.map(|ts| LogicalDay::from_timestamp(ts, &cfg).to_string(&cfg)),
                 subject,
                 knowledge_points,
                 question_images,

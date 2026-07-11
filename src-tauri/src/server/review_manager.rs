@@ -14,7 +14,7 @@ use crate::domain::enums::{MetaKey, QuestionState, ReviewResult, SystemMetaKey};
 use crate::domain::ids::QuestionId;
 use crate::domain::question::Question;
 use crate::domain::state_machine::QuestionStateMachine;
-use crate::util::time::{now_ts, range_of_day, LogicalDay, Timestamp};
+use crate::util::time::{now_ts, range_of_day, ClockConfig, LogicalDay, Timestamp};
 
 /// 推荐的默认最大数量
 const DEFAULT_RECOMMEND_LIMIT: usize = 10;
@@ -459,10 +459,11 @@ impl<'a> ReviewManager<'a> {
         })
     }
 
-    /// 计算今日开始的时间戳（逻辑天，凌晨 03:00:00）
+    /// 计算今日开始的时间戳（按 ClockConfig 切日，默认为凌晨 03:00:00）
     fn get_today_start_timestamp(&self, now: Timestamp) -> i64 {
-        let day = LogicalDay::from(now);
-        let (day_start, _day_end) = range_of_day(day);
+        let cfg = ClockConfig::default();
+        let day = LogicalDay::from_timestamp(now, &cfg);
+        let (day_start, _day_end) = range_of_day(day, &cfg);
         day_start.as_i64()
     }
 }
