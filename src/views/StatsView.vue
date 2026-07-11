@@ -131,9 +131,12 @@ const reviewCountSeries = computed(() => {
     inner.set(p.day_bucket, p.review_count)
   }
   return activeSubjects.value.map((subject) => {
+    // 只在"实际有复习"的日子产出点：x 序号 = day - startBucket；没数据时跳过
     const points: { x: number; y: number }[] = []
     for (let b = startBucket; b <= endBucket; b++) {
-      points.push({ x: b - startBucket, y: bySubjectDay.get(subject)?.get(b) ?? 0 })
+      const v = bySubjectDay.get(subject)?.get(b) ?? 0
+      if (v <= 0) continue
+      points.push({ x: b - startBucket, y: v })
     }
     return { name: subject, color: pickColor(activeSubjects.value.indexOf(subject)), points }
   })
@@ -157,14 +160,14 @@ const accuracySeries = computed(() => {
     inner.set(p.day_bucket, { correct: p.correct_count, wrong: p.wrong_count })
   }
   return activeSubjects.value.map((subject) => {
+    // 只在"实际有 correct+wrong"的日子产出点；模糊单独不计入且为 0 时跳过
     const points: { x: number; y: number }[] = []
     for (let b = startBucket; b <= endBucket; b++) {
       const cell = bySubjectDay.get(subject)?.get(b)
-      if (!cell || (cell.correct + cell.wrong) === 0) {
-        points.push({ x: b - startBucket, y: 0 })
-      } else {
-        points.push({ x: b - startBucket, y: cell.correct / (cell.correct + cell.wrong) })
-      }
+      if (!cell) continue
+      const denom = cell.correct + cell.wrong
+      if (denom <= 0) continue
+      points.push({ x: b - startBucket, y: cell.correct / denom })
     }
     return { name: subject, color: pickColor(activeSubjects.value.indexOf(subject)), points }
   })

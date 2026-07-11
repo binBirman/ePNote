@@ -92,24 +92,44 @@ function scaleY(y: number, b: Bounds): number {
 interface RenderedSeries {
   name: string
   color: string
-  d: string
+  segments: string[]
   circles: { cx: number; cy: number }[]
 }
 
 const rendered = computed<RenderedSeries[]>(() => {
   const b = bounds.value
   return props.series.map((s) => {
-    let d = ''
+    const segments: string[] = []
     const circles: { cx: number; cy: number }[] = []
+    // 按 x 序号是否连续分段：相邻两点的 x 差为 1 时连成一段，否则断开
+    // 单独点（不与任何邻居相连）也作为一段，长度为 1
+    let currentSegment: string[] = []
+    const flush = () => {
+      if (currentSegment.length === 0) return
+      segments.push(currentSegment.join(' '))
+      currentSegment = []
+    }
     for (let i = 0; i < s.points.length; i++) {
       const p = s.points[i]
       if (!p) continue
       const x = scaleX(p.x, b)
       const y = scaleY(p.y, b)
-      d += (i === 0 ? 'M' : 'L') + x.toFixed(1) + ',' + y.toFixed(1) + ' '
+      const pt = `${x.toFixed(1)},${y.toFixed(1)}`
       circles.push({ cx: x, cy: y })
+      if (currentSegment.length === 0) {
+        currentSegment.push('M' + pt)
+      } else {
+        const prev = s.points[i - 1]
+        if (prev && prev.x + 1 === p.x) {
+          currentSegment.push('L' + pt)
+        } else {
+          flush()
+          currentSegment.push('M' + pt)
+        }
+      }
     }
-    return { name: s.name, color: s.color, d: d.trim(), circles }
+    flush()
+    return { name: s.name, color: s.color, segments, circles }
   })
 })
 
@@ -223,8 +243,9 @@ function viewBoxX(x: number) {
         fill="none"
       >
         <path
-          v-if="s.d"
-          :d="s.d"
+          v-for="(d, sIdx) in s.segments"
+          :key="`seg-${idx}-${sIdx}`"
+          :d="d"
           stroke-width="2"
           stroke-linejoin="round"
           stroke-linecap="round"
