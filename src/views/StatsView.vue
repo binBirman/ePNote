@@ -32,23 +32,18 @@ const today = new Date()
 const currentYear = ref(today.getFullYear())
 const currentMonth = ref(today.getMonth() + 1) // 1..=12
 
-// === 每天桶 ↔ 日历日（带设置 timezone/cutoff）===
-const offsetSec = computed(() => store.timezoneOffsetHours * 3600)
-const cutoffSec = computed(() => store.dayCutoffHour * 3600)
+// === 每天桶 ↔ 日历日 ===
+// 图表的"日历日"按 0:00 切日（cutoff = 0），与用户设置中的 day_cutoff_hour 解耦；
+// 用户设置仅影响"今日推荐"等业务口径，不影响折线图横轴的 1-末日 排列。
+const chartOffsetSec = computed(() => store.timezoneOffsetHours * 3600)
 
-function unixToDayBucket(unix: number): number {
-  return Math.floor((unix + offsetSec.value - cutoffSec.value) / 86400)
-}
-
-function dayBucketToLocalYmdLabel(b: number): string {
-  const ts = b * 86400 - offsetSec.value
-  const dt = new Date(ts * 1000)
-  return `${dt.getUTCMonth() + 1}-${dt.getUTCDate()}`
+function chartUnixToDayBucket(unix: number): number {
+  return Math.floor((unix + chartOffsetSec.value) / 86400)
 }
 
 // 本月 1 号本地 00:00 与下月 1 号本地 00:00 对应的 unix sec
 function monthRangeUnix(year: number, month1: number): { startUnix: number; endUnix: number } {
-  const offsetMs = offsetSec.value * 1000
+  const offsetMs = chartOffsetSec.value * 1000
   const startUtcMs = Date.UTC(year, month1 - 1, 1) - offsetMs
   const endUtcMs = Date.UTC(year, month1, 1) - offsetMs
   return {
@@ -57,19 +52,24 @@ function monthRangeUnix(year: number, month1: number): { startUnix: number; endU
   }
 }
 
+const lastDayOfMonth = computed(() => {
+  // new Date(year, month, 0) 是"上个月最后一天"，正好是当月最后一天
+  return new Date(currentYear.value, currentMonth.value, 0).getDate()
+})
+
 const monthDayBucketRange = computed(() => {
   const { startUnix, endUnix } = monthRangeUnix(currentYear.value, currentMonth.value)
   return {
-    startBucket: unixToDayBucket(startUnix),
-    endBucket: Math.max(unixToDayBucket(startUnix), unixToDayBucket(endUnix - 1)),
+    startBucket: chartUnixToDayBucket(startUnix),
+    endBucket: Math.max(chartUnixToDayBucket(startUnix), chartUnixToDayBucket(endUnix - 1)),
   }
 })
 
 const monthXLabels = computed(() => {
-  const { startBucket, endBucket } = monthDayBucketRange.value
+  // 横轴固定为该月 1 号到末日，不受上月末/下月初影响
   const out: string[] = []
-  for (let b = startBucket; b <= endBucket; b++) {
-    out.push(dayBucketToLocalYmdLabel(b))
+  for (let d = 1; d <= lastDayOfMonth.value; d++) {
+    out.push(`${currentMonth.value}-${d}`)
   }
   return out
 })
@@ -82,7 +82,7 @@ async function loadMonthly() {
     const { startBucket, endBucket } = monthDayBucketRange.value
     const data = await getReviewDailySeries({
       timezoneOffsetHours: store.timezoneOffsetHours,
-      dayCutoffHour: store.dayCutoffHour,
+      dayCutoffHour: 0, // 图表按 0:00 切日历日，与用户 cutoff 设置解耦
       startDayBucket: startBucket,
       endDayBucket: endBucket,
       subjectFilter: null,
@@ -256,8 +256,9 @@ onMounted(async () => {
   await loadMonthly()
 })
 
+// 图表不依赖 day_cutoff_hour（横轴固定为 1-末日）；仅在月份或时区改变时重拉
 watch(
-  () => [currentYear.value, currentMonth.value, store.timezoneOffsetHours, store.dayCutoffHour],
+  () => [currentYear.value, currentMonth.value, store.timezoneOffsetHours],
   () => {
     loadMonthly()
   }
