@@ -178,6 +178,37 @@ const MIGRATIONS: &[Migration] = &[
         UPDATE question SET state = 'STABLE' WHERE state = 'DUE';
         "#,
     },
+    Migration {
+        version: 11,
+        name: "show_view_add_wrong_count_and_error_rate",
+        sql: r#"
+        -- 为支持"高频错题"过滤，给 show_view 加 q.wrong_count 与
+        -- 来自 review_summary 视图的 error_rate。
+        -- 不能 ALTER VIEW，先 DROP 后 CREATE。
+        DROP VIEW IF EXISTS show_view;
+        CREATE VIEW show_view AS
+            SELECT
+                q.id,
+                q.name,
+                q.state,
+                q.created_at,
+                q.deleted_at,
+                m.value AS subject,
+                r.last_reviewed_at AS last_reviewed_at,
+                q.wrong_count AS wrong_count,
+                rs.error_rate AS error_rate
+            FROM question q
+            LEFT JOIN meta m
+                ON m.question_id = q.id
+                AND m.key = 'system.Subject'
+            LEFT JOIN (
+                SELECT question_id, MAX(reviewed_at) AS last_reviewed_at
+                FROM review
+                GROUP BY question_id
+            ) r ON r.question_id = q.id
+            LEFT JOIN review_summary rs ON rs.question_id = q.id;
+        "#,
+    },
 ];
 
 /*

@@ -12,10 +12,15 @@ pub struct ViewRow {
     pub deleted_at: Option<i64>,
     pub subject: Option<String>,
     pub last_reviewed_at: Option<i64>,
+    pub wrong_count: i64,
+    pub error_rate: Option<f64>,
 }
 
 const KP_META_KEY: &str = "system.KnowledgePoint";
 
+/// 从 show_view 的 SELECT 行构建 ViewRow。
+/// 调用方必须按以下顺序列出列：id, name, state, created_at, deleted_at,
+/// subject, last_reviewed_at, wrong_count, error_rate。
 fn row_from(row: &rusqlite::Row<'_>) -> rusqlite::Result<ViewRow> {
     Ok(ViewRow {
         id: row.get(0)?,
@@ -25,6 +30,8 @@ fn row_from(row: &rusqlite::Row<'_>) -> rusqlite::Result<ViewRow> {
         deleted_at: row.get(4)?,
         subject: row.get(5)?,
         last_reviewed_at: row.get(6)?,
+        wrong_count: row.get(7)?,
+        error_rate: row.get(8)?,
     })
 }
 
@@ -56,7 +63,8 @@ pub fn select_all_subjects(conn: &Connection) -> Result<Vec<String>, DbError> {
 pub fn select_view_by_id(conn: &Connection, id: i64) -> Result<ViewRow, DbError> {
     let mut stmt = conn.prepare(
         r#"
-        SELECT id, name, state, created_at, deleted_at, subject, last_reviewed_at
+        SELECT id, name, state, created_at, deleted_at, subject, last_reviewed_at,
+               wrong_count, error_rate
         FROM show_view
         WHERE id = ?1
         "#,
@@ -74,7 +82,8 @@ pub fn select_view_by_id(conn: &Connection, id: i64) -> Result<ViewRow, DbError>
 pub fn select_views_by_name(conn: &Connection, name: &str) -> Result<Vec<ViewRow>, DbError> {
     let mut stmt = conn.prepare(
         r#"
-        SELECT id, name, state, created_at, deleted_at, subject, last_reviewed_at
+        SELECT id, name, state, created_at, deleted_at, subject, last_reviewed_at,
+               wrong_count, error_rate
         FROM show_view
         WHERE name = ?1
         "#,
@@ -98,7 +107,8 @@ pub fn select_deleted_views_page(
 ) -> Result<Vec<ViewRow>, DbError> {
     let mut stmt = conn.prepare(
         r#"
-        SELECT id, name, state, created_at, deleted_at, subject, last_reviewed_at
+        SELECT id, name, state, created_at, deleted_at, subject, last_reviewed_at,
+               wrong_count, error_rate
         FROM show_view
         WHERE deleted_at IS NOT NULL
         ORDER BY deleted_at DESC
@@ -124,7 +134,8 @@ pub fn select_views_classified(
     let state_present = state.is_some();
 
     let mut sql = String::from(
-        "SELECT id, name, state, created_at, deleted_at, subject, last_reviewed_at \
+        "SELECT id, name, state, created_at, deleted_at, subject, last_reviewed_at, \
+                wrong_count, error_rate \
          FROM show_view \
          WHERE deleted_at IS NULL",
     );
@@ -169,7 +180,8 @@ pub fn select_view_active_by_id(
 ) -> Result<Option<ViewRow>, DbError> {
     let mut stmt = conn.prepare(
         r#"
-        SELECT id, name, state, created_at, deleted_at, subject, last_reviewed_at
+        SELECT id, name, state, created_at, deleted_at, subject, last_reviewed_at,
+               wrong_count, error_rate
         FROM show_view
         WHERE deleted_at IS NULL AND id = ?1
         "#,
@@ -198,7 +210,8 @@ pub fn select_views_search_fuzzy(
     let state_present = state.is_some();
 
     let mut sql = String::from(
-        "SELECT v.id, v.name, v.state, v.created_at, v.deleted_at, v.subject, v.last_reviewed_at \
+        "SELECT v.id, v.name, v.state, v.created_at, v.deleted_at, v.subject, v.last_reviewed_at, \
+                v.wrong_count, v.error_rate \
          FROM show_view v \
          WHERE v.deleted_at IS NULL \
            AND (v.name LIKE ? \

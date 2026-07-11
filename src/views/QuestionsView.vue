@@ -50,11 +50,20 @@ interface LocalQuestion {
   lastReviewed?: string
   createdDate?: string
   state: string
+  wrongCount: number
+  errorRate: number | null
 }
 const displayedQuestions = ref<LocalQuestion[]>([])
 const subjects = ref<string[]>([])
 
 const isSearching = computed(() => searchKeyword.value.trim().length > 0)
+const onlyHotWrong = ref(false)
+
+// 判定一题是否"高频错题"：累计答错次数 ≥ 3 且错误率 > 50%（新题无错误率，按 false 处理）。
+const isHotWrong = (q: LocalQuestion): boolean =>
+  q.wrongCount >= 3 && q.errorRate !== null && q.errorRate > 0.5
+
+const HOT_WRONG_THRESHOLD = 3
 
 let initialized = false
 
@@ -106,8 +115,16 @@ watch(subjectFilter, () => initialized && scheduleLoad(0))
 watch(stateFilter, () => initialized && scheduleLoad(0))
 watch(searchKeyword, () => initialized && scheduleLoad(0))
 
+// 切换"只看高频错题"不需要重置分页：原页内容可能在过滤后变空，
+// 但保留原 currentPage 让用户切回 OFF 时仍在原页。这里不做额外处理。
+
 const clearSearch = () => {
   searchKeyword.value = ''
+}
+
+const formatRate = (rate: number | null): string => {
+  if (rate === null) return '—'
+  return `${Math.round(rate * 100)}%`
 }
 
 const mapActive = (a: ActiveQuestion): LocalQuestion => ({
@@ -118,6 +135,8 @@ const mapActive = (a: ActiveQuestion): LocalQuestion => ({
   lastReviewed: a.last_review || '',
   createdDate: a.created_at || '',
   state: a.status || '',
+  wrongCount: a.wrong_count ?? 0,
+  errorRate: a.error_rate ?? null,
 })
 
 const loadQuestions = async (page = 0) => {
@@ -167,7 +186,10 @@ const probeHasNext = async (page: number): Promise<boolean> => {
   }
 }
 
-const filteredQuestions = computed(() => displayedQuestions.value)
+const filteredQuestions = computed(() => {
+  if (!onlyHotWrong.value) return displayedQuestions.value
+  return displayedQuestions.value.filter(isHotWrong)
+})
 
 const getStateColor = (state: string) => {
   switch (state) {
@@ -295,6 +317,10 @@ const goToRecycleBin = () => {
           <option value="ALL">全部状态</option>
           <option v-for="s in STATE_OPTIONS" :key="s.value" :value="s.value">{{ s.label }}</option>
         </select>
+        <label class="hot-wrong-toggle" :title="`高频错题: 答错 ≥ ${HOT_WRONG_THRESHOLD} 次且错误率 > 50%`">
+          <input v-model="onlyHotWrong" type="checkbox" />
+          <span>只看高频错题</span>
+        </label>
       </div>
       <div class="toolbar-right">
         <button class="recycle-bin-btn" @click="goToRecycleBin">
@@ -316,16 +342,26 @@ const goToRecycleBin = () => {
         v-for="question in filteredQuestions"
         :key="question.id"
         class="question-item"
+        :class="{ 'hot-wrong': isHotWrong(question) }"
         @click="goToDetail(question.id)"
       >
         <div class="question-header">
           <h3 class="question-title">{{ question.name }}</h3>
-          <span
-            class="state-badge"
-            :style="{ backgroundColor: getStateColor(question.state) }"
-          >
-            {{ getStateLabel(question.state) }}
-          </span>
+          <div class="badges">
+            <span
+              v-if="isHotWrong(question)"
+              class="hot-badge"
+              :title="`高频错题：${question.wrongCount} 次（错误率 ${formatRate(question.errorRate)}）`"
+            >
+              高频 {{ question.wrongCount }}
+            </span>
+            <span
+              class="state-badge"
+              :style="{ backgroundColor: getStateColor(question.state) }"
+            >
+              {{ getStateLabel(question.state) }}
+            </span>
+          </div>
         </div>
         <div class="question-meta">
           <span class="meta-item">#{{ question.id }}</span>
@@ -468,6 +504,32 @@ const goToRecycleBin = () => {
   border-color: #4CAF50;
 }
 
+.hot-wrong-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background-color: #fff;
+  font-size: 13px;
+  color: #555;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.hot-wrong-toggle input {
+  cursor: pointer;
+  margin: 0;
+}
+
+.hot-wrong-toggle:has(input:checked) {
+  border-color: #f44336;
+  color: #c62828;
+  background-color: #fff5f5;
+}
+
 .recycle-bin-btn {
   padding: 8px 16px;
   background-color: #455a64;
@@ -530,6 +592,11 @@ const goToRecycleBin = () => {
   transition: all 0.2s;
   border: 1px solid #e0e0e0;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  border-left: 4px solid transparent;
+}
+
+.question-item.hot-wrong {
+  border-left-color: #f44336;
 }
 
 .question-item:hover {
@@ -557,6 +624,13 @@ const goToRecycleBin = () => {
   overflow-wrap: anywhere;
 }
 
+.badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 .state-badge {
   padding: 4px 10px;
   border-radius: 12px;
@@ -564,6 +638,17 @@ const goToRecycleBin = () => {
   font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
+}
+
+.hot-badge {
+  padding: 4px 10px;
+  border-radius: 12px;
+  background-color: #fdecea;
+  color: #c62828;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  border: 1px solid #f44336;
 }
 
 .question-meta {

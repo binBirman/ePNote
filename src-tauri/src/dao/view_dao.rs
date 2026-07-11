@@ -123,5 +123,7 @@ fn view_from_row(
         subject: row.subject.clone().unwrap_or_default(),
         knowledge_points: knowledge_points.to_vec(),
         last_reviewed_at: Timestamp::from(row.last_reviewed_at.unwrap_or(0)),
+        wrong_count: row.wrong_count,
+        error_rate: row.error_rate,
     })
 }

@@ -446,6 +446,40 @@ fn test_classify_excludes_deleted() {
     assert!(rows.iter().all(|r| r.id != qid));
 }
 
+/// 验证 v11 迁移后 show_view 新加的 wrong_count 与 error_rate 字段能正常读出。
+#[test]
+fn test_v11_show_view_includes_wrong_count_and_error_rate() {
+    let conn = setup_test_db();
+    let now = Utc::now().timestamp();
+
+    let qid = insert_question(&conn, Some("高频错题"), "LEARNING", now).unwrap();
+    insert_meta(&conn, qid, "system.Subject", "数学").unwrap();
+
+    // 5 条 review: 3 错 + 2 对 → wrong_count 直接设 3, error_rate = 3/5 = 0.6
+    insert_review(&conn, qid, "wrong", now).unwrap();
+    insert_review(&conn, qid, "wrong", now + 1).unwrap();
+    insert_review(&conn, qid, "wrong", now + 2).unwrap();
+    insert_review(&conn, qid, "correct", now + 3).unwrap();
+    insert_review(&conn, qid, "correct", now + 4).unwrap();
+    update_question_review_fields(&conn, qid, Some(now + 4), Some("correct"), 2, 3, Some(now + 86400)).unwrap();
+
+    let rows = select_views_classified(&conn, None, None, 10, 0).unwrap();
+    let row = rows.iter().find(|r| r.id == qid).expect("row for qid");
+    assert_eq!(row.wrong_count, 3);
+    let rate = row.error_rate.expect("error_rate 应有值");
+    assert!((rate - 0.6).abs() < 1e-6, "expected ~0.6, got {}", rate);
+
+    // 新题零 review: error_rate 应为 None, wrong_count 为 0
+    let qid2 = insert_question(&conn, Some("新题"), "NEW", now + 100).unwrap();
+    insert_meta(&conn, qid2, "system.Subject", "数学").unwrap();
+    let row2 = select_views_classified(&conn, None, None, 10, 0).unwrap()
+        .into_iter()
+        .find(|r| r.id == qid2)
+        .expect("row for qid2");
+    assert_eq!(row2.wrong_count, 0);
+    assert!(row2.error_rate.is_none(), "新题错误率应为 None");
+}
+
 #[test]
 fn test_search_by_id_exact() {
     let (conn, q1, _, _) = seed_view_data();

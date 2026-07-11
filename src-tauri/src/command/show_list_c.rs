@@ -15,6 +15,10 @@ pub struct ActiveQuestion {
     pub knowledge_points: Vec<String>,
     pub created_at: String,
     pub last_review: String,
+    /// 累计答错次数（用于"高频错题"过滤/标记）。
+    pub wrong_count: i64,
+    /// 错误率（0.0 ~ 1.0），新题可能为 None。
+    pub error_rate: Option<f64>,
 }
 impl ActiveQuestion {
     pub fn new(views: Vec<View>) -> Vec<ActiveQuestion> {
@@ -32,6 +36,8 @@ impl ActiveQuestion {
                 } else {
                     LogicalDay::from(v.last_reviewed_at).to_string()
                 },
+                wrong_count: v.wrong_count,
+                error_rate: v.error_rate,
             })
             .collect()
     }

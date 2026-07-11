@@ -16,6 +16,10 @@ export interface ActiveQuestion {
   knowledge_points: string[];
   created_at: string;
   last_review: string;
+  /** 累计答错次数 */
+  wrong_count: number;
+  /** 错误率 0.0~1.0, 新题可能为 null */
+  error_rate: number | null;
 }
 
 export interface DeleteQuestion {
