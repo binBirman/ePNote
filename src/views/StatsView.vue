@@ -95,6 +95,22 @@ async function loadMonthly() {
   }
 }
 
+// 复习题数 y 轴: 向上取整到 5 的倍数, 至少 1
+function niceReviewCountMax(m: number): number {
+  if (m <= 0) return 5
+  return Math.max(5, Math.ceil(m / 5) * 5)
+}
+
+const reviewCountYMax = computed(() => {
+  let m = 0
+  for (const s of reviewCountSeries.value) {
+    for (const p of s.points) {
+      if (p.y > m) m = p.y
+    }
+  }
+  return niceReviewCountMax(m)
+})
+
 // === 复习题数（折线图 1）===
 
 const activeSubjects = computed(() => {
@@ -438,6 +454,10 @@ watch(
         v-else
         :series="reviewCountSeries"
         :x-labels="monthXLabels"
+        :x-min="0"
+        :x-max="lastDayOfMonth - 1"
+        :y-min="0"
+        :y-max="reviewCountYMax"
         :height="220"
       />
 
@@ -447,6 +467,10 @@ watch(
         v-else
         :series="accuracySeries"
         :x-labels="monthXLabels"
+        :x-min="0"
+        :x-max="lastDayOfMonth - 1"
+        :y-min="0"
+        :y-max="1"
         :height="220"
         y-as-percent
       />

@@ -18,6 +18,12 @@ interface Props {
   height?: number
   /** 0~1 区间的 y 数值显示为百分比，否则保留原值 */
   yAsPercent?: boolean
+  /** 横轴强制范围（含两端点）。未设时按数据自适应 */
+  xMin?: number
+  xMax?: number
+  /** 纵轴强制范围（含两端点）。未设时按数据自适应 */
+  yMin?: number
+  yMax?: number
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -42,40 +48,47 @@ interface Bounds {
 }
 
 const bounds = computed<Bounds>(() => {
-  let xMin = Infinity
-  let xMax = -Infinity
+  // 横轴优先用 prop 强制值；其次按数据范围
+  let dataXMin = Infinity
+  let dataXMax = -Infinity
   let yMin = Infinity
   let yMax = -Infinity
   let anyPoint = false
   for (const s of props.series) {
     for (const p of s.points) {
       anyPoint = true
-      if (p.x < xMin) xMin = p.x
-      if (p.x > xMax) xMax = p.x
+      if (p.x < dataXMin) dataXMin = p.x
+      if (p.x > dataXMax) dataXMax = p.x
       if (p.y < yMin) yMin = p.y
       if (p.y > yMax) yMax = p.y
     }
   }
   if (!anyPoint) {
-    xMin = 0
-    xMax = 1
+    dataXMin = 0
+    dataXMax = 1
     yMin = 0
     yMax = 1
   } else {
-    if (xMin === xMax) {
-      xMin -= 1
-      xMax += 1
+    if (dataXMin === dataXMax) {
+      dataXMin -= 1
+      dataXMax += 1
     }
     if (yMin === yMax) {
       yMin -= 1
       yMax += 1
-    } else {
+    } else if (props.yMin === undefined || props.yMax === undefined) {
+      // 仅在未强制 yMin/yMax 时加 padding
       const pad = (yMax - yMin) * 0.1
       yMax += pad
       yMin = Math.max(0, yMin - pad)
     }
   }
-  return { xMin, xMax, yMin, yMax }
+  return {
+    xMin: props.xMin ?? dataXMin,
+    xMax: props.xMax ?? dataXMax,
+    yMin: props.yMin ?? yMin,
+    yMax: props.yMax ?? yMax,
+  }
 })
 
 function scaleX(x: number, b: Bounds): number {
