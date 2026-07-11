@@ -123,19 +123,24 @@ impl<'a> ReviewDao<'a> {
     /// 每日 × 科目 复习行为时间序列。
     ///
     /// `subject_filter = None` 即"全部科目"；`start_day_bucket` / `end_day_bucket`
-    /// 为 `None` 即不限时间范围（拉全部历史）。具体数值由前端按日历月算并
-    /// 把 unix sec 减 10800（即本地月初 - 3h）转 day_bucket。
+    /// 为 `None` 即不限时间范围（拉全部历史）。
+    /// `offset_seconds` / `cutoff_seconds` 与 `ClockConfig` 对齐，让 SQL
+    /// `(ts + offset - cutoff) / 86400` 公式与 LogicalDay 等价。
     pub fn review_daily_series(
         &self,
         subject_filter: Option<&str>,
         start_day_bucket: Option<i64>,
         end_day_bucket: Option<i64>,
+        offset_seconds: i64,
+        cutoff_seconds: i64,
     ) -> Result<Vec<crate::db::DailySeriesRow>, DbError> {
         crate::db::select_review_daily_series(
             self.conn,
             subject_filter,
             start_day_bucket,
             end_day_bucket,
+            offset_seconds,
+            cutoff_seconds,
         )
     }
 }

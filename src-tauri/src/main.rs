@@ -66,6 +66,8 @@ fn main() {
             review_c::recover_question_comm,
             review_c::list_subjects_comm,
             review_c::get_stats_comm,
+            review_c::subject_error_stats_comm,
+            review_c::review_daily_series_comm,
             // 推荐系统命令
             recommendation_c::get_daily_recommendation_comm,
             recommendation_c::get_recommendation_list_comm,

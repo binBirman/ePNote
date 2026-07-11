@@ -192,6 +192,58 @@ export function getStats() {
 }
 
 /**
+ * StatsView 用的分科错误率统计行。
+ */
+export interface SubjectStat {
+  subject: string;
+  review_count: number;
+  correct_count: number;
+  wrong_count: number;
+  fuzzy_count: number;
+}
+
+/**
+ * StatsView 用的每日 × 科目复习时间序列。
+ */
+export interface DailySeriesPoint {
+  day_bucket: number;
+  subject: string;
+  review_count: number;
+  correct_count: number;
+  wrong_count: number;
+}
+
+/**
+ * 拉所有活动科目的错误率统计。
+ */
+export function getSubjectErrorStats() {
+  return call<SubjectStat[]>("subject_error_stats_comm", {});
+}
+
+/**
+ * 拉按时间窗过滤的每日 × 科目复习时间序列。
+ *
+ * `startDayBucket` / `endDayBucket` 为可选 LogicalDay 日号范围（None 即不限）。
+ * `timezoneOffsetHours` / `dayCutoffHour` 来自用户设置，传入后端算偏移秒数。
+ * `subjectFilter` 为可选科目过滤。
+ */
+export function getReviewDailySeries(params: {
+  timezoneOffsetHours: number;
+  dayCutoffHour: number;
+  startDayBucket?: number | null;
+  endDayBucket?: number | null;
+  subjectFilter?: string | null;
+}) {
+  return call<DailySeriesPoint[]>("review_daily_series_comm", {
+    timezoneOffsetHours: params.timezoneOffsetHours,
+    dayCutoffHour: params.dayCutoffHour,
+    startDayBucket: params.startDayBucket ?? null,
+    endDayBucket: params.endDayBucket ?? null,
+    subjectFilter: params.subjectFilter ?? null,
+  });
+}
+
+/**
  * 根据题目ID列表获取题目（用于练习模式）
  * @param questionIds 题目ID列表
  * @returns 题目列表

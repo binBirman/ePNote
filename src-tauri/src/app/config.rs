@@ -48,6 +48,14 @@ pub struct AppSettings {
     /// 科目配置映射
     #[serde(default)]
     pub subjects: HashMap<String, SubjectConfig>,
+    /// 本地时区相对 UTC 的偏移小时数（东时区为正，西时区为负）。
+    /// 例如 UTC+8 = 8，UTC-5 = -5。
+    #[serde(default = "default_timezone_offset_hours")]
+    pub timezone_offset_hours: i32,
+    /// 逻辑日"切日"小时（0..=23）。
+    /// 凌晨 03:00 = 3；纯按 00:00 切日 = 0。
+    #[serde(default = "default_day_cutoff_hour")]
+    pub day_cutoff_hour: i32,
 }
 
 fn default_review_limit() -> u32 { 10 }
@@ -56,6 +64,8 @@ fn default_new_question_ratio() -> f64 { 0.3 }
 fn default_new_question_guarantee_ratio() -> f64 { 0.2 }
 fn default_recommendation_randomness() -> f64 { 1.0 }
 fn default_show_debug_info() -> bool { false }
+fn default_timezone_offset_hours() -> i32 { 8 }
+fn default_day_cutoff_hour() -> i32 { 3 }
 
 impl Default for AppSettings {
     fn default() -> Self {
@@ -67,6 +77,8 @@ impl Default for AppSettings {
             recommendation_randomness: default_recommendation_randomness(),
             show_debug_info: default_show_debug_info(),
             subjects: HashMap::new(),
+            timezone_offset_hours: default_timezone_offset_hours(),
+            day_cutoff_hour: default_day_cutoff_hour(),
         }
     }
 }

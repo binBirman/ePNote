@@ -172,6 +172,44 @@ function onSubjectLimitChange(subject: string, event: Event) {
           </div>
         </div>
 
+        <!-- 时区偏移小时 -->
+        <div class="setting-row">
+          <div class="setting-info">
+            <span class="setting-label">时区偏移（小时）</span>
+            <span class="setting-desc">本地时间相对 UTC 的偏移。东时区为正（如 UTC+8 = 8），西时区为负（如 UTC-5 = -5）</span>
+          </div>
+          <div class="setting-control">
+            <input
+              v-model.number="store.timezoneOffsetHours"
+              type="number"
+              class="num-input wide"
+              min="-12"
+              max="14"
+              step="1"
+            />
+            <span class="slider-value">h</span>
+          </div>
+        </div>
+
+        <!-- 逻辑日切日小时 -->
+        <div class="setting-row">
+          <div class="setting-info">
+            <span class="setting-label">逻辑日起始小时</span>
+            <span class="setting-desc">凌晨几点切到新的一天。0 = 按 00:00 切日（默认 03:00）。影响"今日推荐"、复习统计的口径</span>
+          </div>
+          <div class="setting-control">
+            <input
+              v-model.number="store.dayCutoffHour"
+              type="number"
+              class="num-input wide"
+              min="0"
+              max="23"
+              step="1"
+            />
+            <span class="slider-value">:00</span>
+          </div>
+        </div>
+
         <!-- 开发者模式 -->
         <div class="setting-row">
           <div class="setting-info">
@@ -388,6 +426,10 @@ function onSubjectLimitChange(subject: string, event: Event) {
   border: 2px solid #4CAF50;
   border-radius: 6px;
   color: #333;
+}
+
+.num-input.wide {
+  width: 80px;
 }
 
 .num-input:focus {

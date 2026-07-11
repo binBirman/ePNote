@@ -258,20 +258,23 @@ pub fn select_subject_error_stats(
 }
 
 /// 每日 × 科目 复习行为时间序列（按"逻辑日"聚合）。
-/// `day_bucket` 是 `(r.reviewed_at + 10800) / 86400` —— 项目默认时区 UTC+8
-/// 且当日 03:00 切新一天，所以 +3 小时后再除以 86400 即得到 LogicalDay 日号。
-/// 前端按日历月过滤时需先把本地月初 / 下月初对应 unix sec 减 10800（即线段范围），
-/// 后端用同一公式在 SQL 算 day_bucket 后再 `WHERE day_bucket BETWEEN ? AND ?`。
+///
+/// `day_bucket` 是 `(r.reviewed_at + offset_sec - cutoff_sec) / 86400`，由调用方提供。
+/// 这与 `LogicalDay` 抽象保持一致；offset_sec = 时区偏移秒，cutoff_sec = 切日秒。
+/// 前端按日历月过滤时也按同一公式算 start_day_bucket / end_day_bucket，
+/// 后端只要 `WHERE day_bucket BETWEEN ? AND ?` 即可。
 pub fn select_review_daily_series(
     conn: &Connection,
     subject_filter: Option<&str>,
     start_day_bucket: Option<i64>,
     end_day_bucket: Option<i64>,
+    offset_seconds: i64,
+    cutoff_seconds: i64,
 ) -> Result<Vec<DailySeriesRow>, DbError> {
     let mut stmt = conn.prepare(
         r#"
         SELECT
-            ((r.reviewed_at + 10800) / 86400) AS day_bucket,
+            ((r.reviewed_at + ?4 - ?5) / 86400) AS day_bucket,
             COALESCE(m.value, '__未分类__') AS subject,
             COUNT(*) AS review_count,
             SUM(CASE WHEN LOWER(r.result) = 'correct' THEN 1 ELSE 0 END) AS correct_count,
@@ -281,22 +284,25 @@ pub fn select_review_daily_series(
             ON m.question_id = r.question_id
             AND m.key = 'system.Subject'
         WHERE (?1 IS NULL OR m.value = ?1)
-          AND (?2 IS NULL OR ((r.reviewed_at + 10800) / 86400) >= ?2)
-          AND (?3 IS NULL OR ((r.reviewed_at + 10800) / 86400) <= ?3)
+          AND (?2 IS NULL OR ((r.reviewed_at + ?4 - ?5) / 86400) >= ?2)
+          AND (?3 IS NULL OR ((r.reviewed_at + ?4 - ?5) / 86400) <= ?3)
         GROUP BY day_bucket, COALESCE(m.value, '__未分类__')
         ORDER BY day_bucket ASC, COALESCE(m.value, '__未分类__') ASC
         "#,
     )?;
 
-    let iter = stmt.query_map((subject_filter, start_day_bucket, end_day_bucket), |row| {
-        Ok(DailySeriesRow {
-            day_bucket: row.get(0)?,
-            subject: row.get(1)?,
-            review_count: row.get(2)?,
-            correct_count: row.get(3)?,
-            wrong_count: row.get(4)?,
-        })
-    })?;
+    let iter = stmt.query_map(
+        (subject_filter, start_day_bucket, end_day_bucket, offset_seconds, cutoff_seconds),
+        |row| {
+            Ok(DailySeriesRow {
+                day_bucket: row.get(0)?,
+                subject: row.get(1)?,
+                review_count: row.get(2)?,
+                correct_count: row.get(3)?,
+                wrong_count: row.get(4)?,
+            })
+        },
+    )?;
 
     iter.collect::<Result<Vec<_>, _>>().map_err(Into::into)
 }

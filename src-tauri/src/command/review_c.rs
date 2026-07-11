@@ -2,9 +2,12 @@ use serde::{Deserialize, Serialize};
 use tauri::State;
 
 use crate::app::{AppInner, AppState};
+use crate::db::{DailySeriesRow, SubjectStatRow};
+use crate::dao::review_dao::ReviewDao;
 use crate::domain::ids::QuestionId;
 use crate::domain::question::Question;
 use crate::server::ReviewManager;
+use crate::util::time::ClockConfig;
 
 /// 推荐结果数据
 #[derive(Serialize, Deserialize)]
@@ -208,4 +211,50 @@ pub fn get_stats_comm(
         today_pending: stats.today_pending,
         average_accuracy,
     })
+}
+
+/// 每个科目的错误率统计（不分时间），供 StatsView 用。
+/// 前端再用 `settings.subjects` 过滤 archived 学科。
+#[tauri::command]
+pub fn subject_error_stats_comm(
+    state: tauri::State<AppState>,
+) -> Result<Vec<SubjectStatRow>, String> {
+    let guard = state.inner.lock().unwrap();
+    let conn = match &*guard {
+        Some(inner) => &inner.db,
+        None => return Err("App not initialized".to_string()),
+    };
+    let dao = ReviewDao::new(conn);
+    dao.subject_error_stats(None)
+        .map_err(|e| format!("failed to load subject error stats: {}", e))
+}
+
+/// 每日 × 科目 复习行为时间序列。
+/// `start_day_bucket` / `end_day_bucket`：用 LogicalDay 日号过滤，可选；
+///   `None` 即不限。`timezone_offset_hours` / `day_cutoff_hour`：从用户设置读，
+///   后端把对应 `ClockConfig` 算 offset/cutoff 秒塞给 SQL，与前端公式同步。
+#[tauri::command]
+pub fn review_daily_series_comm(
+    state: tauri::State<AppState>,
+    timezone_offset_hours: i32,
+    day_cutoff_hour: i32,
+    start_day_bucket: Option<i64>,
+    end_day_bucket: Option<i64>,
+    subject_filter: Option<String>,
+) -> Result<Vec<DailySeriesRow>, String> {
+    let guard = state.inner.lock().unwrap();
+    let conn = match &*guard {
+        Some(inner) => &inner.db,
+        None => return Err("App not initialized".to_string()),
+    };
+    let cfg = ClockConfig::from_settings(timezone_offset_hours, day_cutoff_hour);
+    let dao = ReviewDao::new(conn);
+    dao.review_daily_series(
+        subject_filter.as_deref(),
+        start_day_bucket,
+        end_day_bucket,
+        cfg.offset_seconds,
+        cfg.cutoff_seconds,
+    )
+    .map_err(|e| format!("failed to load review daily series: {}", e))
 }

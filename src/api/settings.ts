@@ -13,6 +13,10 @@ export interface AppSettings {
   new_question_guarantee_ratio: number;
   recommendation_randomness: number;
   show_debug_info: boolean;
+  /** 本地时区相对 UTC 的偏移小时数（东时区为正，例如 +8）。 */
+  timezone_offset_hours: number;
+  /** 逻辑日切日小时（0..=23，例：03 = 凌晨 3 点切日）。 */
+  day_cutoff_hour: number;
 }
 
 export interface AppSettingsResponse {

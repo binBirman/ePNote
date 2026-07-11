@@ -13,6 +13,10 @@ export const useSettingsStore = defineStore('settings', () => {
   const recommendationRandomness = ref<number>(1.0)
   const showDebugInfo = ref<boolean>(false)
 
+  // 时区与逻辑日
+  const timezoneOffsetHours = ref<number>(8)
+  const dayCutoffHour = ref<number>(3)
+
   // 科目池管理
   const subjectConfigs = ref<Record<string, SubjectConfig>>({})
   const allSubjects = ref<string[]>([])
@@ -38,6 +42,8 @@ export const useSettingsStore = defineStore('settings', () => {
       newQuestionGuaranteeRatio.value = s.new_question_guarantee_ratio ?? 0.2
       recommendationRandomness.value = s.recommendation_randomness ?? 1.0
       showDebugInfo.value = s.show_debug_info ?? false
+      timezoneOffsetHours.value = s.timezone_offset_hours ?? 8
+      dayCutoffHour.value = s.day_cutoff_hour ?? 3
       subjectConfigs.value = s.subjects || {}
       loaded.value = true
     } catch (e) {
@@ -55,6 +61,8 @@ export const useSettingsStore = defineStore('settings', () => {
       new_question_guarantee_ratio: newQuestionGuaranteeRatio.value,
       recommendation_randomness: recommendationRandomness.value,
       show_debug_info: showDebugInfo.value,
+      timezone_offset_hours: timezoneOffsetHours.value,
+      day_cutoff_hour: dayCutoffHour.value,
       subjects: subjectConfigs.value,
     }
     await saveAppSettings(settings)
@@ -97,6 +105,8 @@ export const useSettingsStore = defineStore('settings', () => {
     newQuestionGuaranteeRatio,
     recommendationRandomness,
     showDebugInfo,
+    timezoneOffsetHours,
+    dayCutoffHour,
     developerMode,
     subjectConfigs,
     allSubjects,

@@ -1,59 +1,270 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { getStats, getDailyReviewStatus, type StatsData, type DailyReviewStatus } from '@/api/review'
+import { ref, computed, onMounted, watch } from 'vue'
+import { getStats, getSubjectErrorStats, getReviewDailySeries, type StatsData, type SubjectStat, type DailySeriesPoint } from '@/api/review'
+import { useSettingsStore } from '@/stores/settings'
+import LineChart from '@/components/LineChart.vue'
+
+const store = useSettingsStore()
 
 const stats = ref<StatsData | null>(null)
-const dailyStatus = ref<DailyReviewStatus | null>(null)
+const subjectStats = ref<SubjectStat[]>([])
 const loading = ref(true)
+const loadingSubjectStats = ref(true)
+const loadingMonthly = ref(false)
 
-onMounted(async () => {
-  try {
-    // 获取基础统计数据
-    stats.value = await getStats()
+// 折线图颜色（按 settings.activeSubjects 顺序循环）
+const SUBJECT_COLORS: string[] = [
+  '#2196F3',
+  '#4CAF50',
+  '#FF9800',
+  '#9C27B0',
+  '#00BCD4',
+  '#E91E63',
+  '#795548',
+  '#607D8B',
+]
+function pickColor(i: number): string {
+  return SUBJECT_COLORS[i % SUBJECT_COLORS.length] ?? '#666'
+}
 
-    // 获取今日复习状态
-    dailyStatus.value = await getDailyReviewStatus()
-  } catch (e) {
-    console.error('加载统计失败:', e)
-  } finally {
-    loading.value = false
+// === 当前月份（calendar year & 1-indexed month）===
+const today = new Date()
+const currentYear = ref(today.getFullYear())
+const currentMonth = ref(today.getMonth() + 1) // 1..=12
+
+// === 每天桶 ↔ 日历日（带设置 timezone/cutoff）===
+const offsetSec = computed(() => store.timezoneOffsetHours * 3600)
+const cutoffSec = computed(() => store.dayCutoffHour * 3600)
+
+function unixToDayBucket(unix: number): number {
+  return Math.floor((unix + offsetSec.value - cutoffSec.value) / 86400)
+}
+
+function dayBucketToLocalYmdLabel(b: number): string {
+  const ts = b * 86400 - offsetSec.value
+  const dt = new Date(ts * 1000)
+  return `${dt.getUTCMonth() + 1}-${dt.getUTCDate()}`
+}
+
+// 本月 1 号本地 00:00 与下月 1 号本地 00:00 对应的 unix sec
+function monthRangeUnix(year: number, month1: number): { startUnix: number; endUnix: number } {
+  const offsetMs = offsetSec.value * 1000
+  const startUtcMs = Date.UTC(year, month1 - 1, 1) - offsetMs
+  const endUtcMs = Date.UTC(year, month1, 1) - offsetMs
+  return {
+    startUnix: Math.floor(startUtcMs / 1000),
+    endUnix: Math.floor(endUtcMs / 1000),
+  }
+}
+
+const monthDayBucketRange = computed(() => {
+  const { startUnix, endUnix } = monthRangeUnix(currentYear.value, currentMonth.value)
+  return {
+    startBucket: unixToDayBucket(startUnix),
+    endBucket: Math.max(unixToDayBucket(startUnix), unixToDayBucket(endUnix - 1)),
   }
 })
 
-// 按状态统计的题目数
+const monthXLabels = computed(() => {
+  const { startBucket, endBucket } = monthDayBucketRange.value
+  const out: string[] = []
+  for (let b = startBucket; b <= endBucket; b++) {
+    out.push(dayBucketToLocalYmdLabel(b))
+  }
+  return out
+})
+
+const monthlyDailySeries = ref<DailySeriesPoint[]>([])
+
+async function loadMonthly() {
+  loadingMonthly.value = true
+  try {
+    const { startBucket, endBucket } = monthDayBucketRange.value
+    const data = await getReviewDailySeries({
+      timezoneOffsetHours: store.timezoneOffsetHours,
+      dayCutoffHour: store.dayCutoffHour,
+      startDayBucket: startBucket,
+      endDayBucket: endBucket,
+      subjectFilter: null,
+    })
+    monthlyDailySeries.value = data
+  } catch (e) {
+    console.error('加载月度复习序列失败', e)
+  } finally {
+    loadingMonthly.value = false
+  }
+}
+
+// === 复习题数（折线图 1）===
+
+const activeSubjects = computed(() => {
+  const archived = new Set<string>()
+  for (const [name, cfg] of Object.entries(store.subjectConfigs)) {
+    if (cfg.archived) archived.add(name)
+  }
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const row of subjectStats.value) {
+    if (row.subject === '__未分类__') continue
+    if (archived.has(row.subject)) continue
+    if (seen.has(row.subject)) continue
+    seen.add(row.subject)
+    out.push(row.subject)
+  }
+  return out
+})
+
+const reviewCountSeries = computed(() => {
+  const colors = new Map<string, string>()
+  activeSubjects.value.forEach((s, i) => {
+    colors.set(s, pickColor(i))
+  })
+  const { startBucket, endBucket } = monthDayBucketRange.value
+  const bySubjectDay = new Map<string, Map<number, number>>()
+  for (const p of monthlyDailySeries.value) {
+    if (!colors.has(p.subject)) continue
+    let inner = bySubjectDay.get(p.subject)
+    if (!inner) {
+      inner = new Map()
+      bySubjectDay.set(p.subject, inner)
+    }
+    inner.set(p.day_bucket, p.review_count)
+  }
+  return activeSubjects.value.map((subject) => {
+    const points: { x: number; y: number }[] = []
+    for (let b = startBucket; b <= endBucket; b++) {
+      points.push({ x: b - startBucket, y: bySubjectDay.get(subject)?.get(b) ?? 0 })
+    }
+    return { name: subject, color: pickColor(activeSubjects.value.indexOf(subject)), points }
+  })
+})
+
+// === 准确率（折线图 2）===
+const accuracySeries = computed(() => {
+  const colors = new Map<string, string>()
+  activeSubjects.value.forEach((s, i) => {
+    colors.set(s, pickColor(i))
+  })
+  const { startBucket, endBucket } = monthDayBucketRange.value
+  const bySubjectDay = new Map<string, Map<number, { correct: number; wrong: number }>>()
+  for (const p of monthlyDailySeries.value) {
+    if (!colors.has(p.subject)) continue
+    let inner = bySubjectDay.get(p.subject)
+    if (!inner) {
+      inner = new Map()
+      bySubjectDay.set(p.subject, inner)
+    }
+    inner.set(p.day_bucket, { correct: p.correct_count, wrong: p.wrong_count })
+  }
+  return activeSubjects.value.map((subject) => {
+    const points: { x: number; y: number }[] = []
+    for (let b = startBucket; b <= endBucket; b++) {
+      const cell = bySubjectDay.get(subject)?.get(b)
+      if (!cell || (cell.correct + cell.wrong) === 0) {
+        points.push({ x: b - startBucket, y: 0 })
+      } else {
+        points.push({ x: b - startBucket, y: cell.correct / (cell.correct + cell.wrong) })
+      }
+    }
+    return { name: subject, color: pickColor(activeSubjects.value.indexOf(subject)), points }
+  })
+})
+
+// === 分科错误率表（活动学科）===
+const activeSubjectStats = computed(() => {
+  const archived = new Set<string>()
+  for (const [name, cfg] of Object.entries(store.subjectConfigs)) {
+    if (cfg.archived) archived.add(name)
+  }
+  return subjectStats.value
+    .filter((r) => r.subject !== '__未分类__' && !archived.has(r.subject))
+    .sort((a, b) => b.review_count - a.review_count)
+})
+
+function accuracyOf(stat: SubjectStat): number {
+  const denom = stat.correct_count + stat.wrong_count
+  if (denom <= 0) return 0
+  return stat.correct_count / denom
+}
+function accuracyPct(stat: SubjectStat): string {
+  return (accuracyOf(stat) * 100).toFixed(0) + '%'
+}
+
+// === 题目状态分布（保留）===
 const stateStats = computed(() => {
   if (!stats.value) return { NEW: 0, LEARNING: 0, STABLE: 0 }
   return {
     NEW: stats.value.state_counts.new_count,
     LEARNING: stats.value.state_counts.learning_count,
-    STABLE: stats.value.state_counts.stable_count
+    STABLE: stats.value.state_counts.stable_count,
   }
 })
 
-// 今日待复习数（使用更准确的推荐系统数据）
-const todayPending = computed(() => {
-  if (!dailyStatus.value) return stats.value?.today_pending || 0
-  return dailyStatus.value.recommended_count - dailyStatus.value.reviewed_count
-})
-
-// 今日已完成数（使用更准确的推荐系统数据）
-const todayCompleted = computed(() => {
-  if (!dailyStatus.value) return stats.value?.today_reviewed || 0
-  return dailyStatus.value.reviewed_count
-})
-
-// 计算进度百分比
-const getProgressWidth = (count: number) => {
+function getProgressWidth(count: number) {
   if (!stats.value || stats.value.total_questions === 0) return '0'
   return (count / stats.value.total_questions * 100).toFixed(1)
 }
+
+function prevMonth() {
+  let m = currentMonth.value - 1
+  let y = currentYear.value
+  if (m < 1) {
+    m = 12
+    y -= 1
+  }
+  currentMonth.value = m
+  currentYear.value = y
+}
+
+function nextMonth() {
+  let m = currentMonth.value + 1
+  let y = currentYear.value
+  if (m > 12) {
+    m = 1
+    y += 1
+  }
+  currentMonth.value = m
+  currentYear.value = y
+}
+
+function jumpToCurrentMonth() {
+  currentYear.value = today.getFullYear()
+  currentMonth.value = today.getMonth() + 1
+}
+
+onMounted(async () => {
+  if (!store.loaded) {
+    await store.loadSettings()
+  }
+  try {
+    stats.value = await getStats()
+  } catch (e) {
+    console.error('加载统计失败:', e)
+  } finally {
+    loading.value = false
+  }
+  try {
+    subjectStats.value = await getSubjectErrorStats()
+  } catch (e) {
+    console.error('加载分科错误率失败', e)
+  } finally {
+    loadingSubjectStats.value = false
+  }
+  await loadMonthly()
+})
+
+watch(
+  () => [currentYear.value, currentMonth.value, store.timezoneOffsetHours, store.dayCutoffHour],
+  () => {
+    loadMonthly()
+  }
+)
 </script>
 
 <template>
   <div class="stats-container">
     <h1 class="page-title">统计</h1>
 
-    <!-- 加载状态 -->
     <div v-if="loading" class="loading">加载中...</div>
 
     <template v-else-if="stats">
@@ -169,27 +380,74 @@ const getProgressWidth = (count: number) => {
       </div>
     </div>
 
-    <!-- 今日复习情况 -->
+    <!-- 分科错误率 -->
     <div class="section-card">
-      <h2 class="section-title">今日复习情况</h2>
-      <div class="today-stats">
-        <div class="today-item">
-          <div class="today-label">待复习</div>
-          <div class="today-value">{{ todayPending }}</div>
+      <h2 class="section-title">分科错误率</h2>
+      <p class="section-desc">仅显示活动学科；模糊结果不计入准确率（业务规则 6.2.2）</p>
+      <div v-if="loadingSubjectStats" class="loading-inline">加载中...</div>
+      <table v-else class="subject-stats-table">
+        <thead>
+          <tr>
+            <th>学科</th>
+            <th class="num">总复习</th>
+            <th class="num">记得</th>
+            <th class="num">不记得</th>
+            <th class="num">模糊</th>
+            <th class="num">准确率</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in activeSubjectStats" :key="row.subject">
+            <td>{{ row.subject }}</td>
+            <td class="num">{{ row.review_count }}</td>
+            <td class="num">{{ row.correct_count }}</td>
+            <td class="num">{{ row.wrong_count }}</td>
+            <td class="num">{{ row.fuzzy_count }}</td>
+            <td class="num">{{ accuracyPct(row) }}</td>
+          </tr>
+          <tr v-if="activeSubjectStats.length === 0">
+            <td colspan="6" class="empty-cell">暂无数据</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 复习行为统计：折线图 -->
+    <div class="section-card">
+      <h2 class="section-title">复习行为统计</h2>
+      <p class="section-desc">每个活动学科一条折线；横轴按"逻辑日"（时区与切日按设置调整）</p>
+
+      <div class="month-switcher">
+        <button class="month-btn" @click="prevMonth">←</button>
+        <div class="month-label">
+          <span class="month-y">{{ currentYear }} 年</span>
+          <span class="month-m">{{ currentMonth }} 月</span>
         </div>
-        <div class="today-item">
-          <div class="today-label">已完成</div>
-          <div class="today-value completed">{{ todayCompleted }}</div>
-        </div>
+        <button class="month-btn" @click="nextMonth">→</button>
+        <button class="month-jump" @click="jumpToCurrentMonth">回到本月</button>
+        <span class="month-active-info">
+          共 <strong>{{ activeSubjects.length }}</strong> 个活动学科
+        </span>
       </div>
-      <div class="today-tip">
-        <template v-if="todayPending <= 0">
-          🎉 恭喜！今日复习计划已完成！
-        </template>
-        <template v-else>
-          💡 继续加油！还剩 {{ todayPending }} 题未复习。
-        </template>
-      </div>
+
+      <h3 class="chart-title">各科复习题数 / 日</h3>
+      <div v-if="loadingMonthly" class="loading-inline">加载中...</div>
+      <LineChart
+        v-else
+        :series="reviewCountSeries"
+        :x-labels="monthXLabels"
+        :height="220"
+      />
+
+      <h3 class="chart-title">各科准确率 / 日</h3>
+      <div v-if="loadingMonthly" class="loading-inline">加载中...</div>
+      <LineChart
+        v-else
+        :series="accuracySeries"
+        :x-labels="monthXLabels"
+        :height="220"
+        y-as-percent
+      />
     </div>
     </template>
   </div>
@@ -207,6 +465,13 @@ const getProgressWidth = (count: number) => {
   color: #666;
   font-size: 16px;
   padding: 40px;
+}
+
+.loading-inline {
+  color: #666;
+  font-size: 13px;
+  padding: 20px;
+  text-align: center;
 }
 
 .page-title {
@@ -248,25 +513,12 @@ const getProgressWidth = (count: number) => {
   height: 100%;
 }
 
-.icon-blue {
-  color: #2196F3;
-}
+.icon-blue { color: #2196F3; }
+.icon-green { color: #4CAF50; }
+.icon-orange { color: #FF9800; }
+.icon-purple { color: #9C27B0; }
 
-.icon-green {
-  color: #4CAF50;
-}
-
-.icon-orange {
-  color: #FF9800;
-}
-
-.icon-purple {
-  color: #9C27B0;
-}
-
-.stat-info {
-  flex: 1;
-}
+.stat-info { flex: 1; }
 
 .stat-value {
   font-size: 28px;
@@ -293,8 +545,14 @@ const getProgressWidth = (count: number) => {
 .section-title {
   font-size: 18px;
   color: #333;
-  margin-bottom: 20px;
+  margin-bottom: 12px;
   font-weight: 600;
+}
+
+.section-desc {
+  color: #888;
+  font-size: 12px;
+  margin-bottom: 16px;
 }
 
 /* 状态分布 */
@@ -321,22 +579,11 @@ const getProgressWidth = (count: number) => {
   font-weight: 500;
 }
 
-.state-name.new {
-  color: #2196F3;
-}
+.state-name.new     { color: #2196F3; }
+.state-name.learning { color: #FF9800; }
+.state-name.stable  { color: #4CAF50; }
 
-.state-name.learning {
-  color: #FF9800;
-}
-
-.state-name.stable {
-  color: #4CAF50;
-}
-
-.state-count {
-  color: #666;
-  font-size: 14px;
-}
+.state-count { color: #666; font-size: 14px; }
 
 .progress-bar {
   height: 8px;
@@ -351,61 +598,104 @@ const getProgressWidth = (count: number) => {
   transition: width 0.3s ease;
 }
 
-.progress-fill.new {
-  background-color: #2196F3;
-}
+.progress-fill.new     { background-color: #2196F3; }
+.progress-fill.learning { background-color: #FF9800; }
+.progress-fill.stable  { background-color: #4CAF50; }
 
-.progress-fill.learning {
-  background-color: #FF9800;
-}
+.state-percent { text-align: right; color: #666; font-size: 13px; }
 
-.progress-fill.stable {
-  background-color: #4CAF50;
-}
-
-.state-percent {
-  text-align: right;
-  color: #666;
+/* 分科错误率表 */
+.subject-stats-table {
+  width: 100%;
+  border-collapse: collapse;
   font-size: 13px;
 }
 
-/* 今日复习情况 */
-.today-stats {
-  display: flex;
-  gap: 24px;
-  margin-bottom: 16px;
+.subject-stats-table th,
+.subject-stats-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #eee;
+  text-align: left;
 }
 
-.today-item {
-  flex: 1;
-  text-align: center;
+.subject-stats-table th {
   background-color: #fafafa;
-  border-radius: 8px;
-  padding: 20px;
+  font-weight: 600;
+  color: #555;
 }
 
-.today-label {
-  color: #666;
+.subject-stats-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.subject-stats-table .empty-cell {
+  text-align: center;
+  color: #999;
+  padding: 16px;
+}
+
+/* 月份切换 */
+.month-switcher {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.month-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+  background-color: #fff;
+  cursor: pointer;
   font-size: 14px;
-  margin-bottom: 12px;
-}
-
-.today-value {
-  font-size: 36px;
-  font-weight: bold;
   color: #333;
 }
 
-.today-value.completed {
-  color: #4CAF50;
+.month-btn:hover {
+  background-color: #f5f5f5;
 }
 
-.today-tip {
-  color: #666;
+.month-label {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  font-weight: 600;
+  font-size: 16px;
+  color: #333;
+  min-width: 110px;
+  justify-content: center;
+}
+
+.month-y { font-size: 13px; color: #666; }
+.month-m { font-size: 18px; }
+
+.month-jump {
+  padding: 6px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background-color: #fff;
+  cursor: pointer;
+  font-size: 12px;
+  color: #555;
+}
+
+.month-jump:hover { background-color: #f5f5f5; }
+
+.month-active-info {
+  color: #888;
+  font-size: 12px;
+  margin-left: auto;
+}
+
+/* 折线图 */
+.chart-title {
   font-size: 14px;
-  padding: 12px;
-  background-color: #fafafa;
-  border-radius: 8px;
-  border-left: 3px solid #4CAF50;
+  color: #444;
+  margin: 18px 0 10px;
+  font-weight: 600;
 }
 </style>
