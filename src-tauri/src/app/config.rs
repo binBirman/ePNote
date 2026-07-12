@@ -63,7 +63,7 @@ fn default_per_subject_daily_limit() -> u32 { 10 }
 fn default_new_question_ratio() -> f64 { 0.3 }
 fn default_new_question_guarantee_ratio() -> f64 { 0.2 }
 fn default_recommendation_randomness() -> f64 { 1.0 }
-fn default_show_debug_info() -> bool { false }
+fn default_show_debug_info() -> bool { true }
 fn default_timezone_offset_hours() -> i32 { 8 }
 fn default_day_cutoff_hour() -> i32 { 3 }
 

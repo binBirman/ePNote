@@ -11,7 +11,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const newQuestionRatio = ref<number>(0.3)
   const newQuestionGuaranteeRatio = ref<number>(0.2)
   const recommendationRandomness = ref<number>(1.0)
-  const showDebugInfo = ref<boolean>(false)
+  const showDebugInfo = ref<boolean>(true)
 
   // 时区与逻辑日
   const timezoneOffsetHours = ref<number>(8)
@@ -41,7 +41,7 @@ export const useSettingsStore = defineStore('settings', () => {
       newQuestionRatio.value = s.new_question_ratio ?? 0.3
       newQuestionGuaranteeRatio.value = s.new_question_guarantee_ratio ?? 0.2
       recommendationRandomness.value = s.recommendation_randomness ?? 1.0
-      showDebugInfo.value = s.show_debug_info ?? false
+      showDebugInfo.value = s.show_debug_info ?? true
       timezoneOffsetHours.value = s.timezone_offset_hours ?? 8
       dayCutoffHour.value = s.day_cutoff_hour ?? 3
       subjectConfigs.value = s.subjects || {}
