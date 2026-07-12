@@ -33,6 +33,43 @@
 - 显示调试信息开关
 - 开发者模式
 
+## 下载安装
+
+> **当前仅支持 Windows 10/11**，macOS / Linux 版本暂无计划。
+
+前往 [GitHub Releases](https://github.com/binBirman/ePNote/releases) 页面下载最新安装包：
+
+- **`.msi`** — 标准 Windows 安装包，自动配置环境
+- **`.exe`** — 免安装便携版，双击即可运行
+
+### 首次使用
+
+1. 启动应用后选择数据存储目录
+2. 点击"初始化系统"
+3. 重启应用
+
+### 题目状态体系
+
+| 状态 | 说明 |
+|------|------|
+| NEW | 新建题目，尚未复习 |
+| LEARNING | 学习中，尚未达到掌握阈值 |
+| STABLE | 已连续答对 3 次进入稳定期 |
+| DUE | 已到期，需要重新复习 |
+| SUSPENDED | 暂停复习，手动切换 |
+
+### 复习间隔算法
+
+```
+interval_days = streak² / difficulty
+
+streak: 连续正确次数
+difficulty: 难度系数（由题目自身决定）
+
+FUZZY（模糊）结果：streak -= 1
+WRONG（错误）结果：streak = 0 → 下次复习为 1 天
+```
+
 ## 技术栈
 
 | 层级 | 技术 | 版本要求 |
@@ -116,35 +153,6 @@ npm run tauri build
 | `npm run lint` | ESLint 代码检查（--fix --cache） |
 | `cargo test` | Rust 单元测试 |
 | `cargo check` | Rust 编译检查 |
-
-## 使用说明
-
-### 首次使用
-1. 启动应用后选择数据存储目录
-2. 点击"初始化系统"
-3. 重启应用
-
-### 题目状态体系
-
-| 状态 | 说明 |
-|------|------|
-| NEW | 新建题目，尚未复习 |
-| LEARNING | 学习中，尚未达到掌握阈值 |
-| STABLE | 已连续答对 3 次进入稳定期 |
-| DUE | 已到期，需要重新复习 |
-| SUSPENDED | 暂停复习，手动切换 |
-
-### 复习间隔算法
-
-```
-interval_days = streak² / difficulty
-
-streak: 连续正确次数
-difficulty: 难度系数（由题目自身决定）
-
-FUZZY（模糊）结果：streak -= 1
-WRONG（错误）结果：streak = 0 → 下次复习为 1 天
-```
 
 ## 配置
 
