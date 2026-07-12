@@ -40,3 +40,6 @@ __screenshots__/
 
 # 实验用的数据库不上传
 /src-tauri/DataRoot/
+
+# 会话工作记录(本地总结文档, 不入库)
+/SESSION_SUMMARY.md
