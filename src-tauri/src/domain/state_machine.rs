@@ -56,18 +56,35 @@ impl QuestionStateMachine {
                 // NEW → LEARNING: 首次复习（任意结果）
                 // 新题一定是不稳定的，直接转到 LEARNING
                 match result {
-                    ReviewResult::CORRECT => StateTransition {
-                        new_state: QuestionState::LEARNING,
-                        correct_streak: 1,
-                        wrong_count: current_wrong,
-                        due_at: Some(Self::calculate_next_due(now, QuestionState::LEARNING)),
-                    },
-                    ReviewResult::WRONG | ReviewResult::FUZZY => StateTransition {
-                        new_state: QuestionState::LEARNING,
-                        correct_streak: 0,
-                        wrong_count: current_wrong + 1,
-                        due_at: Some(Self::calculate_next_due(now, QuestionState::LEARNING)),
-                    },
+                    ReviewResult::CORRECT => {
+                        let new_streak = 1;
+                        StateTransition {
+                            new_state: QuestionState::LEARNING,
+                            correct_streak: new_streak,
+                            wrong_count: current_wrong,
+                            due_at: Some(Self::due_at_after_review(
+                                now,
+                                result,
+                                new_streak,
+                                current_wrong,
+                            )),
+                        }
+                    }
+                    ReviewResult::WRONG | ReviewResult::FUZZY => {
+                        let new_streak = 0;
+                        let new_wrong = current_wrong + 1;
+                        StateTransition {
+                            new_state: QuestionState::LEARNING,
+                            correct_streak: new_streak,
+                            wrong_count: new_wrong,
+                            due_at: Some(Self::due_at_after_review(
+                                now,
+                                result,
+                                new_streak,
+                                new_wrong,
+                            )),
+                        }
+                    }
                 }
             }
             QuestionState::LEARNING => {
@@ -76,31 +93,40 @@ impl QuestionStateMachine {
                     ReviewResult::CORRECT => {
                         // 连续正确，增加 streak
                         let new_streak = current_streak + 1;
-                        if new_streak >= STABLE_THRESHOLD {
-                            // LEARNING → STABLE: 连续正确 ≥ 3 次
-                            StateTransition {
-                                new_state: QuestionState::STABLE,
-                                correct_streak: new_streak,
-                                wrong_count: current_wrong,
-                                due_at: Some(Self::calculate_next_due(now, QuestionState::STABLE)),
-                            }
+                        let new_state = if new_streak >= STABLE_THRESHOLD {
+                            QuestionState::STABLE
                         } else {
-                            // 保持 LEARNING 状态
-                            StateTransition {
-                                new_state: QuestionState::LEARNING,
-                                correct_streak: new_streak,
-                                wrong_count: current_wrong,
-                                due_at: Some(Self::calculate_next_due(now, QuestionState::LEARNING)),
-                            }
+                            QuestionState::LEARNING
+                        };
+                        StateTransition {
+                            new_state,
+                            correct_streak: new_streak,
+                            wrong_count: current_wrong,
+                            due_at: Some(Self::due_at_after_review(
+                                now,
+                                result,
+                                new_streak,
+                                current_wrong,
+                            )),
                         }
                     }
                     ReviewResult::WRONG | ReviewResult::FUZZY => {
-                        // LEARNING → LEARNING: 错误/模糊，streak 清零
+                        // LEARNING: 错误清零；模糊减 1（与推荐系统一致）
+                        let new_streak = match result {
+                            ReviewResult::WRONG => 0,
+                            _ => (current_streak - 1).max(0),
+                        };
+                        let new_wrong = current_wrong + 1;
                         StateTransition {
                             new_state: QuestionState::LEARNING,
-                            correct_streak: 0,
-                            wrong_count: current_wrong + 1,
-                            due_at: Some(Self::calculate_next_due(now, QuestionState::LEARNING)),
+                            correct_streak: new_streak,
+                            wrong_count: new_wrong,
+                            due_at: Some(Self::due_at_after_review(
+                                now,
+                                result,
+                                new_streak,
+                                new_wrong,
+                            )),
                         }
                     }
                 }
@@ -115,16 +141,31 @@ impl QuestionStateMachine {
                             new_state: QuestionState::STABLE,
                             correct_streak: new_streak,
                             wrong_count: current_wrong,
-                            due_at: Some(Self::calculate_next_due(now, QuestionState::STABLE)),
+                            due_at: Some(Self::due_at_after_review(
+                                now,
+                                result,
+                                new_streak,
+                                current_wrong,
+                            )),
                         }
                     }
                     ReviewResult::WRONG | ReviewResult::FUZZY => {
-                        // STABLE → LEARNING: 错误/模糊，回到 LEARNING
+                        // STABLE: 错误清零；模糊减 1（与推荐系统一致）
+                        let new_streak = match result {
+                            ReviewResult::WRONG => 0,
+                            _ => (current_streak - 1).max(0),
+                        };
+                        let new_wrong = current_wrong + 1;
                         StateTransition {
                             new_state: QuestionState::LEARNING,
-                            correct_streak: 0,
-                            wrong_count: current_wrong + 1,
-                            due_at: Some(Self::calculate_next_due(now, QuestionState::LEARNING)),
+                            correct_streak: new_streak,
+                            wrong_count: new_wrong,
+                            due_at: Some(Self::due_at_after_review(
+                                now,
+                                result,
+                                new_streak,
+                                new_wrong,
+                            )),
                         }
                     }
                 }
@@ -170,14 +211,36 @@ impl QuestionStateMachine {
         }
     }
 
-    /// 根据状态计算下次复习间隔
-    fn calculate_next_due(now: Timestamp, state: QuestionState) -> Timestamp {
-        let interval_seconds = match state {
-            QuestionState::LEARNING => 1 * 24 * 60 * 60, // 1天后
-            QuestionState::STABLE => 7 * 24 * 60 * 60,   // 7天后
-            _ => 1 * 24 * 60 * 60,                       // 默认1天
+    /// 根据复习结果与更新后的 streak / wrong_count 计算下次复习间隔天数。
+    /// 公式与推荐系统 (server/recommendation.rs) 保持一致，用于 due_at 字段。
+    /// - CORRECT: ceil(stability² / difficulty)，stability = streak_after + 1
+    /// - FUZZY:   上述一半
+    /// - WRONG:   1 天
+    ///   其中 difficulty = 1 + wrong_count × 0.2
+    pub fn calculate_interval_days(
+        result: ReviewResult,
+        streak_after: i64,
+        wrong_count_after: i64,
+    ) -> i64 {
+        let stability = (streak_after + 1) as f64;
+        let difficulty = 1.0 + (wrong_count_after as f64) * 0.2;
+        let raw_days = match result {
+            ReviewResult::CORRECT => stability * stability / difficulty,
+            ReviewResult::FUZZY => (stability * stability / difficulty) * 0.5,
+            ReviewResult::WRONG => 1.0,
         };
-        Timestamp::from(now.as_i64() + interval_seconds)
+        raw_days.ceil().max(1.0) as i64
+    }
+
+    /// 给定更新后的 streak / wrong_count 与结果，把 due_at 设为 now + interval 天
+    fn due_at_after_review(
+        now: Timestamp,
+        result: ReviewResult,
+        streak_after: i64,
+        wrong_count_after: i64,
+    ) -> Timestamp {
+        let interval = Self::calculate_interval_days(result, streak_after, wrong_count_after);
+        Timestamp::from(now.as_i64() + interval * 24 * 60 * 60)
     }
 }
 
@@ -239,15 +302,16 @@ mod tests {
     }
 
     #[test]
-    fn test_stable_to_learning_on_wrong() {
+    fn test_stable_to_learning_on_fuzzy_decreases_streak() {
         let mut question = create_question(QuestionState::STABLE);
         question.correct_streak = 5;
         let now = Timestamp::from(1000);
 
+        // FUZZY: streak 减 1（与 recommendation.rs::calculate_next_review 一致）
         let result = QuestionStateMachine::process_review(&question, ReviewResult::FUZZY, now);
 
         assert_eq!(result.new_state, QuestionState::LEARNING);
-        assert_eq!(result.correct_streak, 0);
+        assert_eq!(result.correct_streak, 4);
     }
 
     #[test]
@@ -280,5 +344,124 @@ mod tests {
 
         assert_eq!(result.new_state, QuestionState::LEARNING);
         assert_eq!(result.due_at, Some(now));
+    }
+
+    // ===== due_at 公式测试（业务规则 5.3：连续答对 → 间隔逐渐拉长）=====
+    //
+    // 公式: stability = (streak_after + 1)
+    //       difficulty = 1 + wrong_count × 0.2
+    //       CORRECT: ceil(stability² / difficulty)
+    //       FUZZY:   ceil(stability² / difficulty × 0.5)
+    //       WRONG:   1 天
+
+    fn due_at_days(transition: &StateTransition, now: Timestamp) -> i64 {
+        let due = transition.due_at.expect("due_at should be set");
+        (due.as_i64() - now.as_i64()) / 86_400
+    }
+
+    #[test]
+    fn test_due_at_correct_streak_0() {
+        // NEW 答对 → streak=1, wrong=0, stability=2, difficulty=1
+        // interval = 4/1 = 4 天
+        let question = create_question(QuestionState::NEW);
+        let now = Timestamp::from(1000);
+        let t = QuestionStateMachine::process_review(&question, ReviewResult::CORRECT, now);
+        assert_eq!(t.correct_streak, 1);
+        assert_eq!(due_at_days(&t, now), 4);
+    }
+
+    #[test]
+    fn test_due_at_correct_streak_2() {
+        // LEARNING streak=2 答对 → streak=3, stability=4
+        // interval = 16/1 = 16 天，同时升 STABLE
+        let mut question = create_question(QuestionState::LEARNING);
+        question.correct_streak = 2;
+        let now = Timestamp::from(1000);
+        let t = QuestionStateMachine::process_review(&question, ReviewResult::CORRECT, now);
+        assert_eq!(t.correct_streak, 3);
+        assert_eq!(t.new_state, QuestionState::STABLE);
+        assert_eq!(due_at_days(&t, now), 16);
+    }
+
+    #[test]
+    fn test_due_at_correct_streak_4_keeps_growing() {
+        // STABLE streak=4 答对 → streak=5, stability=6
+        // interval = 36/1 = 36 天
+        let mut question = create_question(QuestionState::STABLE);
+        question.correct_streak = 4;
+        let now = Timestamp::from(1000);
+        let t = QuestionStateMachine::process_review(&question, ReviewResult::CORRECT, now);
+        assert_eq!(t.correct_streak, 5);
+        assert_eq!(t.new_state, QuestionState::STABLE);
+        assert_eq!(due_at_days(&t, now), 36);
+    }
+
+    #[test]
+    fn test_due_at_fuzzy_streak_3_is_half() {
+        // LEARNING streak=3 fuzzy → streak=2, wrong=1, difficulty=1.2
+        // interval = 9/1.2 × 0.5 = 3.75 → ceil = 4 天
+        let mut question = create_question(QuestionState::LEARNING);
+        question.correct_streak = 3;
+        let now = Timestamp::from(1000);
+        let t = QuestionStateMachine::process_review(&question, ReviewResult::FUZZY, now);
+        assert_eq!(t.correct_streak, 2);
+        assert_eq!(t.new_state, QuestionState::LEARNING);
+        assert_eq!(due_at_days(&t, now), 4);
+    }
+
+    #[test]
+    fn test_due_at_wrong_is_one_day() {
+        // STABLE streak=5 答错 → streak=0, wrong=1
+        // interval 公式: WRONG 直接返回 1.0 → 1 天
+        let mut question = create_question(QuestionState::STABLE);
+        question.correct_streak = 5;
+        question.wrong_count = 0;
+        let now = Timestamp::from(1000);
+        let t = QuestionStateMachine::process_review(&question, ReviewResult::WRONG, now);
+        assert_eq!(t.correct_streak, 0);
+        assert_eq!(t.wrong_count, 1);
+        assert_eq!(due_at_days(&t, now), 1);
+    }
+
+    #[test]
+    fn test_due_at_difficulty_with_wrong_count() {
+        // STABLE streak=0 答对 → streak=1, wrong=3, difficulty=1.6
+        // stability=2, interval = 4/1.6 = 2.5 → ceil = 3 天
+        let mut question = create_question(QuestionState::STABLE);
+        question.correct_streak = 0;
+        question.wrong_count = 3;
+        let now = Timestamp::from(1000);
+        let t = QuestionStateMachine::process_review(&question, ReviewResult::CORRECT, now);
+        assert_eq!(t.correct_streak, 1);
+        assert_eq!(due_at_days(&t, now), 3);
+    }
+
+    #[test]
+    fn test_due_at_correct_streak_2_no_wrong() {
+        // 隔离验证 calculate_interval_days: streak_after=2, wrong=0, CORRECT
+        // stability=3, difficulty=1, raw=9, ceil=9
+        let r = QuestionStateMachine::calculate_interval_days(ReviewResult::CORRECT, 2, 0);
+        assert_eq!(r, 9);
+        // 同样输入下 FUZZY 应是 4.5 → ceil 5
+        let r2 = QuestionStateMachine::calculate_interval_days(ReviewResult::FUZZY, 2, 0);
+        assert_eq!(r2, 5);
+    }
+
+    #[test]
+    fn test_due_at_growth_monotonic_for_correct_streak() {
+        // 验证业务规则 5.3：连续答对时间隔逐次增长
+        let now = Timestamp::from(1000);
+        let mut q = create_question(QuestionState::NEW);
+        let mut prev = 0;
+        for _ in 0..6 {
+            let t = QuestionStateMachine::process_review(&q, ReviewResult::CORRECT, now);
+            let d = due_at_days(&t, now);
+            assert!(d > prev, "interval must grow: was {prev}, now {d}");
+            prev = d;
+            // 让下一题用 transition 后的状态/streak
+            q.state = t.new_state;
+            q.correct_streak = t.correct_streak;
+            q.wrong_count = t.wrong_count;
+        }
     }
 }
