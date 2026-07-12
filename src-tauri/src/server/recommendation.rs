@@ -179,6 +179,7 @@ impl<'a> RecommendationSystem<'a> {
                 question.due_at.map(|d| d.as_i64()),
                 now.as_i64(),
                 &last_result_str,
+                error_rate,
             );
 
             let subject = self.meta_dao
@@ -496,6 +497,7 @@ impl<'a> RecommendationSystem<'a> {
                 question.due_at.map(|d| d.as_i64()),
                 now.as_i64(),
                 &last_result_str,
+                error_rate,
             );
 
             // 获取科目
@@ -688,6 +690,7 @@ impl<'a> RecommendationSystem<'a> {
     /// - "到期"        due_at 存在且 overdue_days = 0（且不是新题）
     /// - "超期 N 天"   due_at 存在且 overdue_days > 0
     /// - "上次出错"    last_result == "wrong" 或 "fuzzy"
+    /// - "错误率 X%"   error_rate > 0.5
     ///
     /// `due_at = None` 时不输出"到期"/"超期"（新题未设置 due_at 属正常）。
     fn generate_reason(
@@ -695,6 +698,7 @@ impl<'a> RecommendationSystem<'a> {
         due_at: Option<i64>,
         now: i64,
         last_result: &Option<String>,
+        error_rate: Option<f64>,
     ) -> Option<Vec<String>> {
         let mut reasons: Vec<(u8, String)> = Vec::new();
 
@@ -712,6 +716,11 @@ impl<'a> RecommendationSystem<'a> {
         if let Some(r) = last_result {
             if r == "wrong" || r == "fuzzy" {
                 reasons.push((3, "上次出错".to_string()));
+            }
+        }
+        if let Some(rate) = error_rate {
+            if rate > 0.5 {
+                reasons.push((4, format!("错误率{:.0}%", rate * 100.0)));
             }
         }
 
@@ -894,14 +903,14 @@ mod tests {
     #[test]
     fn test_reason_new_q() {
         // 新题: review_count = 0
-        let r = RecommendationSystem::generate_reason(0, None, 0, &None);
+        let r = RecommendationSystem::generate_reason(0, None, 0, &None, None);
         assert_eq!(r, Some(vec!["新题".to_string()]));
     }
 
     #[test]
     fn test_reason_review_count_3_still_new_q() {
         // review_count = 3 仍标"新题"
-        let r = RecommendationSystem::generate_reason(3, None, 100, &None);
+        let r = RecommendationSystem::generate_reason(3, None, 100, &None, None);
         assert_eq!(r, Some(vec!["新题".to_string()]));
     }
 
@@ -914,6 +923,7 @@ mod tests {
             Some(1_000_000 - overdue_secs),
             1_000_000,
             &None,
+            None,
         );
         // 4 次复习, due=now-50天, now → overdue 50 天 → "超期 50 天"
         assert_eq!(r, Some(vec!["超期50天".to_string()]));
@@ -922,21 +932,21 @@ mod tests {
     #[test]
     fn test_reason_due_now_no_overdue_reviewed() {
         // due_at = now, review_count > 0 → "到期"
-        let r = RecommendationSystem::generate_reason(5, Some(1000), 1000, &None);
+        let r = RecommendationSystem::generate_reason(5, Some(1000), 1000, &None, None);
         assert_eq!(r, Some(vec!["到期".to_string()]));
     }
 
     #[test]
     fn test_reason_due_in_future_not_overdue() {
         // due_at 在未来, overdue = 0, review_count > 0 → "到期"
-        let r = RecommendationSystem::generate_reason(5, Some(2000), 1000, &None);
+        let r = RecommendationSystem::generate_reason(5, Some(2000), 1000, &None, None);
         assert_eq!(r, Some(vec!["到期".to_string()]));
     }
 
     #[test]
     fn test_reason_due_in_past_overdue_days() {
         // due_at 过去 7 天 → "超期 7 天"
-        let r = RecommendationSystem::generate_reason(5, Some(1000 - 7 * 86400), 1000, &None);
+        let r = RecommendationSystem::generate_reason(5, Some(1000 - 7 * 86400), 1000, &None, None);
         assert_eq!(r, Some(vec!["超期7天".to_string()]));
     }
 
@@ -944,32 +954,32 @@ mod tests {
     fn test_reason_new_q_due_in_past() {
         // 新题 (review_count=0) 即便 due_at 在过去也不标"超期" — 新题没有 due_at
         // 测试 due_at = None 路径
-        let r = RecommendationSystem::generate_reason(0, None, 1000, &None);
+        let r = RecommendationSystem::generate_reason(0, None, 1000, &None, None);
         assert_eq!(r, Some(vec!["新题".to_string()]));
     }
 
     #[test]
     fn test_reason_last_wrong() {
-        let r = RecommendationSystem::generate_reason(5, Some(1000), 1000, &Some("wrong".to_string()));
+        let r = RecommendationSystem::generate_reason(5, Some(1000), 1000, &Some("wrong".to_string()), None);
         assert_eq!(r, Some(vec!["到期".to_string(), "上次出错".to_string()]));
     }
 
     #[test]
     fn test_reason_last_fuzzy() {
-        let r = RecommendationSystem::generate_reason(5, Some(1000), 1000, &Some("fuzzy".to_string()));
+        let r = RecommendationSystem::generate_reason(5, Some(1000), 1000, &Some("fuzzy".to_string()), None);
         assert_eq!(r, Some(vec!["到期".to_string(), "上次出错".to_string()]));
     }
 
     #[test]
     fn test_reason_last_correct_not_included() {
-        let r = RecommendationSystem::generate_reason(5, Some(1000), 1000, &Some("correct".to_string()));
+        let r = RecommendationSystem::generate_reason(5, Some(1000), 1000, &Some("correct".to_string()), None);
         assert_eq!(r, Some(vec!["到期".to_string()]));
     }
 
     #[test]
     fn test_reason_combined_new_q_overdue() {
         // 新题 due_at 在过去: 只显示"新题"
-        let r = RecommendationSystem::generate_reason(2, Some(1000 - 3 * 86400), 1000, &Some("wrong".to_string()));
+        let r = RecommendationSystem::generate_reason(2, Some(1000 - 3 * 86400), 1000, &Some("wrong".to_string()), None);
         // 新题: 优先级 1
         // 超期: 优先级 2
         // 上次出错: 优先级 3
@@ -982,8 +992,42 @@ mod tests {
         // 没有"到期"标签(因 due_at = None), 没"超期", 没"上次出错"
         // 只有 review_count = 4 没有"新题"标签
         // 所以没标签 → None
-        let r = RecommendationSystem::generate_reason(4, None, 1000, &Some("correct".to_string()));
+        let r = RecommendationSystem::generate_reason(4, None, 1000, &Some("correct".to_string()), None);
         assert_eq!(r, None);
+    }
+
+    #[test]
+    fn test_reason_error_rate_above_threshold() {
+        // error_rate > 0.5 → "错误率 80%"
+        let r = RecommendationSystem::generate_reason(5, Some(1000), 1000, &None, Some(0.8));
+        assert_eq!(r, Some(vec!["到期".to_string(), "错误率80%".to_string()]));
+    }
+
+    #[test]
+    fn test_reason_error_rate_below_threshold() {
+        // error_rate <= 0.5 不标
+        let r = RecommendationSystem::generate_reason(5, Some(1000), 1000, &None, Some(0.5));
+        assert_eq!(r, Some(vec!["到期".to_string()]));
+    }
+
+    #[test]
+    fn test_reason_error_rate_combined_with_others() {
+        // 高错误率 + 上次错 + 到期: 全部 4 个标签
+        let r = RecommendationSystem::generate_reason(
+            5,
+            Some(1000),
+            1000,
+            &Some("wrong".to_string()),
+            Some(0.6),
+        );
+        assert_eq!(
+            r,
+            Some(vec![
+                "到期".to_string(),
+                "上次出错".to_string(),
+                "错误率60%".to_string(),
+            ])
+        );
     }
 
     // ===== generate_exclusion_reason =====
