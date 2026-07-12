@@ -348,6 +348,31 @@ impl<'a> RecommendationSystem<'a> {
         Ok(results)
     }
 
+    /// 复习会话用：评分每道题 + 产出 reason 词条，但**不写 recommendation 表**。
+    ///
+    /// 走 `generate_recommendation` 同样的分池 / 评分 / 标签逻辑；
+    /// `limit` 是总上限（None = 不截断，每 subject 用 `per_subject_daily_limit`）。
+    pub fn recommend_for_review(
+        &self,
+        limit: Option<usize>,
+        subject: Option<&str>,
+    ) -> Result<Vec<RecommendedQuestion>, DbError> {
+        let settings = crate::app::config::load_settings();
+        let mut qs = self.generate_recommendation(
+            now_ts(),
+            &settings.subjects,
+            settings.per_subject_daily_limit,
+            settings.new_question_guarantee_ratio,
+        )?;
+        if let Some(target) = subject.filter(|s| !s.is_empty()) {
+            qs.retain(|q| q.subject.as_deref() == Some(target));
+        }
+        if let Some(n) = limit {
+            qs.truncate(n);
+        }
+        Ok(qs)
+    }
+
     /// 获取推荐统计概览
     pub fn get_recommendation_stats(
         &self,
