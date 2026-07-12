@@ -176,10 +176,9 @@ impl<'a> RecommendationSystem<'a> {
 
             let reason = Self::generate_reason(
                 review_count,
-                detail.forget_risk,
-                overdue_days,
+                question.due_at.map(|d| d.as_i64()),
+                now.as_i64(),
                 &last_result_str,
-                error_rate,
             );
 
             let subject = self.meta_dao
@@ -320,17 +319,10 @@ impl<'a> RecommendationSystem<'a> {
                 // but new questions in pool B might have been pool A rejects
                 let selected = pool_b_selected_ids.contains(&q.question_id);
 
-                let reason: Vec<String> = q.reason.unwrap_or_default();
-
+                let reason: Vec<String> = q.reason.clone().unwrap_or_default();
+                let score_detail = q.score_detail;
                 let exclusion_reason: Vec<String> = if !selected && show_exclusion_reason {
-                    if q.review_count == 0 {
-                        vec!["新题保送名额已满，评分未达到入选线".to_string()]
-                    } else {
-                        vec![format!(
-                            "同科排名第{}/{}，分数低于入选线",
-                            b_rank, total
-                        )]
-                    }
+                    Self::generate_exclusion_reason(&q, now.as_i64(), b_rank)
                 } else {
                     vec![]
                 };
@@ -476,10 +468,9 @@ impl<'a> RecommendationSystem<'a> {
             // 生成推荐理由
             let reason = Self::generate_reason(
                 review_count,
-                detail.forget_risk,
-                overdue_days,
+                question.due_at.map(|d| d.as_i64()),
+                now.as_i64(),
                 &last_result_str,
-                error_rate,
             );
 
             // 获取科目
@@ -665,32 +656,37 @@ impl<'a> RecommendationSystem<'a> {
     }
 
     /// 生成推荐理由，按固定优先级排序
+    /// 生成"被推荐"理由标签（按优先级排序）。
+    ///
+    /// 词条：
+    /// - "新题"        review_count ≤ 3
+    /// - "到期"        due_at 存在且 overdue_days = 0（且不是新题）
+    /// - "超期 N 天"   due_at 存在且 overdue_days > 0
+    /// - "上次出错"    last_result == "wrong" 或 "fuzzy"
+    ///
+    /// `due_at = None` 时不输出"到期"/"超期"（新题未设置 due_at 属正常）。
     fn generate_reason(
         review_count: i64,
-        forget_risk: f64,
-        overdue_days: f64,
+        due_at: Option<i64>,
+        now: i64,
         last_result: &Option<String>,
-        error_rate: Option<f64>,
     ) -> Option<Vec<String>> {
         let mut reasons: Vec<(u8, String)> = Vec::new();
 
-        if review_count == 0 {
-            reasons.push((1, "新加入题目".to_string()));
+        if review_count <= 3 {
+            reasons.push((1, "新题".to_string()));
         }
-        if forget_risk >= 1.0 && overdue_days >= 0.0 {
-            reasons.push((2, "已到复习时间".to_string()));
-        }
-        if overdue_days > 0.0 {
-            reasons.push((3, format!("已超期{}天", overdue_days as i64)));
-        }
-        if let Some(r) = last_result {
-            if r == "wrong" {
-                reasons.push((4, "上次回答错误".to_string()));
+        if let Some(d) = due_at {
+            let overdue_days = (now - d) / DAY_SECONDS;
+            if overdue_days > 0 {
+                reasons.push((2, format!("超期{overdue_days}天")));
+            } else if review_count > 0 {
+                reasons.push((2, "到期".to_string()));
             }
         }
-        if let Some(rate) = error_rate {
-            if rate >= 0.5 {
-                reasons.push((5, format!("错误率{:.0}%", rate * 100.0)));
+        if let Some(r) = last_result {
+            if r == "wrong" || r == "fuzzy" {
+                reasons.push((3, "上次出错".to_string()));
             }
         }
 
@@ -699,6 +695,56 @@ impl<'a> RecommendationSystem<'a> {
         }
         reasons.sort_by_key(|(priority, _)| *priority);
         Some(reasons.into_iter().map(|(_, text)| text).collect())
+    }
+
+    /// "遗忘风险低" / "错误率低" 阈值：评分超过阈值时算"高"，不输出该词条。
+    const EXCLUSION_THRESHOLD: f64 = 1.5;
+
+    /// 生成"落选"原因标签。
+    ///
+    /// 规则：
+    /// - SUSPENDED → ["暂停复习"]
+    /// - 已掌握（STABLE 且未到期）→ ["已掌握"]
+    /// - 其他：
+    ///   - forget_risk < 阈值 → "遗忘风险低"
+    ///   - error_rate_bonus < 阈值 → "错误率低"
+    ///   - 都 ≥ 阈值 → "同科排名低于 N"（N = subject_rank）
+    fn generate_exclusion_reason(
+        q: &RecommendedQuestion,
+        now: i64,
+        subject_rank: usize,
+    ) -> Vec<String> {
+        // 1. 暂停复习
+        if q.state == "SUSPENDED" {
+            return vec!["暂停复习".to_string()];
+        }
+        // 2. 已掌握
+        let overdue_days = q.due_at
+            .map(|d| (now - d) / DAY_SECONDS)
+            .unwrap_or(0);
+        if q.state == "STABLE" && overdue_days == 0 {
+            return vec!["已掌握".to_string()];
+        }
+        // 3. 按评分给分
+        let detail = q.score_detail.unwrap_or(ScoreDetail {
+            forget_risk: 0.0,
+            freshness_bonus: 1.0,
+            last_wrong_bonus: 1.0,
+            error_rate_bonus: 1.0,
+            randomness: 1.0,
+            final_score: 0.0,
+        });
+        let mut reasons: Vec<String> = Vec::new();
+        if detail.forget_risk < Self::EXCLUSION_THRESHOLD {
+            reasons.push("遗忘风险低".to_string());
+        }
+        if detail.error_rate_bonus < Self::EXCLUSION_THRESHOLD {
+            reasons.push("错误率低".to_string());
+        }
+        if reasons.is_empty() {
+            reasons.push(format!("同科排名低于{subject_rank}"));
+        }
+        reasons
     }
 
     /// 处理复习结果 - 更新题目复习状态
@@ -777,5 +823,244 @@ impl<'a> RecommendationSystem<'a> {
         let due_at = Timestamp::from(due_at_seconds);
 
         Ok((new_streak, new_wrong, due_at))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn dummy_recommended_question(
+        state: &str,
+        review_count: i64,
+        wrong_count: i64,
+        due_at: Option<i64>,
+        last_result: Option<&str>,
+        forget_risk: f64,
+        error_rate_bonus: f64,
+    ) -> RecommendedQuestion {
+        RecommendedQuestion {
+            question_id: 1,
+            name: Some("Q".to_string()),
+            score: 1.0,
+            state: state.to_string(),
+            due_at,
+            correct_streak: 0,
+            wrong_count,
+            last_result: last_result.map(|s| s.to_string()),
+            error_rate: Some(0.5),
+            subject: Some("数学".to_string()),
+            reason: None,
+            score_detail: Some(ScoreDetail {
+                forget_risk,
+                freshness_bonus: 1.0,
+                last_wrong_bonus: 1.0,
+                error_rate_bonus,
+                randomness: 1.0,
+                final_score: 1.0,
+            }),
+            review_count,
+            created_at: 0,
+        }
+    }
+
+    // ===== generate_reason =====
+
+    #[test]
+    fn test_reason_new_q() {
+        // 新题: review_count = 0
+        let r = RecommendationSystem::generate_reason(0, None, 0, &None);
+        assert_eq!(r, Some(vec!["新题".to_string()]));
+    }
+
+    #[test]
+    fn test_reason_review_count_3_still_new_q() {
+        // review_count = 3 仍标"新题"
+        let r = RecommendationSystem::generate_reason(3, None, 100, &None);
+        assert_eq!(r, Some(vec!["新题".to_string()]));
+    }
+
+    #[test]
+    fn test_reason_review_count_4_not_new_q() {
+        // review_count = 4 不再标"新题"
+        let overdue_secs = 50 * 86400;
+        let r = RecommendationSystem::generate_reason(
+            4,
+            Some(1_000_000 - overdue_secs),
+            1_000_000,
+            &None,
+        );
+        // 4 次复习, due=now-50天, now → overdue 50 天 → "超期 50 天"
+        assert_eq!(r, Some(vec!["超期50天".to_string()]));
+    }
+
+    #[test]
+    fn test_reason_due_now_no_overdue_reviewed() {
+        // due_at = now, review_count > 0 → "到期"
+        let r = RecommendationSystem::generate_reason(5, Some(1000), 1000, &None);
+        assert_eq!(r, Some(vec!["到期".to_string()]));
+    }
+
+    #[test]
+    fn test_reason_due_in_future_not_overdue() {
+        // due_at 在未来, overdue = 0, review_count > 0 → "到期"
+        let r = RecommendationSystem::generate_reason(5, Some(2000), 1000, &None);
+        assert_eq!(r, Some(vec!["到期".to_string()]));
+    }
+
+    #[test]
+    fn test_reason_due_in_past_overdue_days() {
+        // due_at 过去 7 天 → "超期 7 天"
+        let r = RecommendationSystem::generate_reason(5, Some(1000 - 7 * 86400), 1000, &None);
+        assert_eq!(r, Some(vec!["超期7天".to_string()]));
+    }
+
+    #[test]
+    fn test_reason_new_q_due_in_past() {
+        // 新题 (review_count=0) 即便 due_at 在过去也不标"超期" — 新题没有 due_at
+        // 测试 due_at = None 路径
+        let r = RecommendationSystem::generate_reason(0, None, 1000, &None);
+        assert_eq!(r, Some(vec!["新题".to_string()]));
+    }
+
+    #[test]
+    fn test_reason_last_wrong() {
+        let r = RecommendationSystem::generate_reason(5, Some(1000), 1000, &Some("wrong".to_string()));
+        assert_eq!(r, Some(vec!["到期".to_string(), "上次出错".to_string()]));
+    }
+
+    #[test]
+    fn test_reason_last_fuzzy() {
+        let r = RecommendationSystem::generate_reason(5, Some(1000), 1000, &Some("fuzzy".to_string()));
+        assert_eq!(r, Some(vec!["到期".to_string(), "上次出错".to_string()]));
+    }
+
+    #[test]
+    fn test_reason_last_correct_not_included() {
+        let r = RecommendationSystem::generate_reason(5, Some(1000), 1000, &Some("correct".to_string()));
+        assert_eq!(r, Some(vec!["到期".to_string()]));
+    }
+
+    #[test]
+    fn test_reason_combined_new_q_overdue() {
+        // 新题 due_at 在过去: 只显示"新题"
+        let r = RecommendationSystem::generate_reason(2, Some(1000 - 3 * 86400), 1000, &Some("wrong".to_string()));
+        // 新题: 优先级 1
+        // 超期: 优先级 2
+        // 上次出错: 优先级 3
+        assert_eq!(r, Some(vec!["新题".to_string(), "超期3天".to_string(), "上次出错".to_string()]));
+    }
+
+    #[test]
+    fn test_reason_no_conditions_returns_none() {
+        // review_count > 3, due_at None, last_result = correct
+        // 没有"到期"标签(因 due_at = None), 没"超期", 没"上次出错"
+        // 只有 review_count = 4 没有"新题"标签
+        // 所以没标签 → None
+        let r = RecommendationSystem::generate_reason(4, None, 1000, &Some("correct".to_string()));
+        assert_eq!(r, None);
+    }
+
+    // ===== generate_exclusion_reason =====
+
+    #[test]
+    fn test_exclusion_suspended() {
+        let q = dummy_recommended_question("SUSPENDED", 5, 0, Some(1000), None, 1.0, 1.0);
+        assert_eq!(RecommendationSystem::generate_exclusion_reason(&q, 1000, 5), vec!["暂停复习".to_string()]);
+    }
+
+    #[test]
+    fn test_exclusion_stable_no_overdue() {
+        // STABLE + due_at 未来 → "已掌握"
+        let q = dummy_recommended_question("STABLE", 10, 0, Some(2000), None, 1.0, 1.0);
+        assert_eq!(RecommendationSystem::generate_exclusion_reason(&q, 1000, 5), vec!["已掌握".to_string()]);
+    }
+
+    #[test]
+    fn test_exclusion_stable_due_now() {
+        // STABLE + due_at = now → "已掌握" (overdue = 0)
+        let q = dummy_recommended_question("STABLE", 10, 0, Some(1000), None, 1.0, 1.0);
+        assert_eq!(RecommendationSystem::generate_exclusion_reason(&q, 1000, 5), vec!["已掌握".to_string()]);
+    }
+
+    #[test]
+    fn test_exclusion_stable_overdue_goes_to_score() {
+        // STABLE + overdue 7 天 → 走评分路径 (不再算"已掌握")
+        let q = dummy_recommended_question("STABLE", 10, 0, Some(1000 - 7 * 86400), None, 0.5, 1.0);
+        // forget_risk = 0.5 < 1.5 → "遗忘风险低"
+        let res = RecommendationSystem::generate_exclusion_reason(&q, 1000, 5);
+        assert!(res.contains(&"遗忘风险低".to_string()));
+    }
+
+    #[test]
+    fn test_exclusion_low_forget_only() {
+        // LEARNING, forget_risk 低, error_rate_bonus 高
+        let q = dummy_recommended_question(
+            "LEARNING",
+            10,
+            0,
+            Some(1000 - 86400),  // overdue 1 天
+            None,
+            1.0,  // forget_risk 低 (< 1.5)
+            2.0,  // error_rate_bonus 高
+        );
+        let res = RecommendationSystem::generate_exclusion_reason(&q, 1000, 5);
+        assert_eq!(res, vec!["遗忘风险低".to_string()]);
+    }
+
+    #[test]
+    fn test_exclusion_low_error_rate_only() {
+        let q = dummy_recommended_question(
+            "LEARNING",
+            10,
+            0,
+            Some(1000 - 86400),
+            None,
+            2.0,  // forget_risk 高
+            1.0,  // error_rate_bonus 低
+        );
+        let res = RecommendationSystem::generate_exclusion_reason(&q, 1000, 5);
+        assert_eq!(res, vec!["错误率低".to_string()]);
+    }
+
+    #[test]
+    fn test_exclusion_both_low() {
+        let q = dummy_recommended_question(
+            "LEARNING",
+            10,
+            0,
+            Some(1000 - 86400),
+            None,
+            1.0,
+            1.0,
+        );
+        let res = RecommendationSystem::generate_exclusion_reason(&q, 1000, 5);
+        assert_eq!(res, vec!["遗忘风险低".to_string(), "错误率低".to_string()]);
+    }
+
+    #[test]
+    fn test_exclusion_both_high_falls_back_to_rank() {
+        let q = dummy_recommended_question(
+            "LEARNING",
+            10,
+            0,
+            Some(1000 - 86400),
+            None,
+            2.0,
+            2.0,
+        );
+        let res = RecommendationSystem::generate_exclusion_reason(&q, 1000, 7);
+        assert_eq!(res, vec!["同科排名低于7".to_string()]);
+    }
+
+    #[test]
+    fn test_exclusion_no_score_detail_uses_zero_defaults() {
+        // 没 score_detail 时, forget_risk = 0, error_rate_bonus = 0 都 < 1.5
+        let mut q = dummy_recommended_question("LEARNING", 10, 0, Some(1000 - 86400), None, 0.0, 0.0);
+        q.score_detail = None;
+        let res = RecommendationSystem::generate_exclusion_reason(&q, 1000, 5);
+        // forget_risk = 0 < 1.5 → "遗忘风险低"
+        // error_rate_bonus = 0 < 1.5 → "错误率低"
+        assert_eq!(res, vec!["遗忘风险低".to_string(), "错误率低".to_string()]);
     }
 }
